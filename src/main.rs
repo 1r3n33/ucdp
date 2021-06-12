@@ -16,13 +16,20 @@ async fn manual_hello() -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let mut settings = config::Config::default();
+    settings
+        .merge(config::File::with_name("config/Main"))
+        .unwrap();
+
+    let bind = settings.get::<String>("server.bind").unwrap();
+
     HttpServer::new(|| {
         App::new()
             .service(hello)
             .service(echo)
             .route("/hey", web::get().to(manual_hello))
     })
-    .bind("127.0.0.1:8080")?
+    .bind(bind)?
     .run()
     .await
 }
