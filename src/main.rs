@@ -1,17 +1,18 @@
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{client, post, web, App, Error, HttpResponse, HttpServer};
 
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
+struct AppState {
+    client: client::Client,
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
+#[post("/")]
+async fn proxy(req_body: String, data: web::Data<AppState>) -> Result<HttpResponse, Error> {
+    let mut result = data
+        .client
+        .post("http://127.0.0.1:8090")
+        .send_body(req_body)
+        .await?;
 
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
+    Ok(HttpResponse::Ok().body(result.body().await?))
 }
 
 #[actix_web::main]
@@ -25,9 +26,10 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .data(AppState {
+                client: client::Client::default(),
+            })
+            .service(proxy)
     })
     .bind(bind)?
     .run()
