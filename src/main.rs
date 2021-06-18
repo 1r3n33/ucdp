@@ -2,12 +2,14 @@ use actix_web::{post, web, App, Error, HttpResponse, HttpServer};
 use isahc::{prelude::*, HttpClient};
 
 struct AppState {
-    client: isahc::HttpClient,
+    clients: Vec<isahc::HttpClient>,
 }
 
 #[post("/")]
 async fn proxy(req_body: String, data: web::Data<AppState>) -> Result<HttpResponse, Error> {
-    let mut result = data.client.post("http://127.0.0.1:8090", req_body).unwrap();
+    let mut result = data.clients[0]
+        .post("http://127.0.0.1:8090", req_body)
+        .unwrap();
 
     Ok(HttpResponse::Ok().body(result.text()?))
 }
@@ -19,16 +21,18 @@ async fn main() -> std::io::Result<()> {
         .merge(config::File::with_name("config/Main"))
         .unwrap();
 
-    let bind_config = config.get::<String>("server.bind").unwrap();
+    let bind_config = config.get_str("server.bind").unwrap();
 
-    HttpServer::new(|| {
-        App::new()
-            .data(AppState {
-                client: HttpClient::new().unwrap(),
-            })
-            .service(proxy)
-    })
-    .bind(bind_config)?
-    .run()
-    .await
+    let clients_config = config.get_table("clients").unwrap();
+    let clients = clients_config
+        .into_iter()
+        .map(|_| HttpClient::new().unwrap())
+        .collect();
+
+    let state = web::Data::new(AppState { clients: clients });
+
+    HttpServer::new(move || App::new().app_data(state.clone()).service(proxy))
+        .bind(bind_config)?
+        .run()
+        .await
 }
