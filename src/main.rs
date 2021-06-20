@@ -1,16 +1,21 @@
 use actix_web::{post, web, App, Error, HttpResponse, HttpServer};
 use isahc::{prelude::*, HttpClient};
+use std::collections::HashMap;
 
 mod ucdp;
-use crate::ucdp::Client;
+use ucdp::Client;
 
 struct AppState {
-    clients: Vec<Client>,
+    clients: HashMap<String, Client>,
 }
 
-#[post("/")]
-async fn proxy(req_body: String, data: web::Data<AppState>) -> Result<HttpResponse, Error> {
-    let client = &data.clients[0];
+#[post("/{client_id}")]
+async fn proxy(
+    req_body: String,
+    client_id: web::Path<String>,
+    data: web::Data<AppState>,
+) -> Result<HttpResponse, Error> {
+    let client = &data.clients[client_id.as_str()];
 
     let mut result = client.client.post(&client.address, req_body).unwrap();
 
@@ -29,10 +34,15 @@ async fn main() -> std::io::Result<()> {
     let clients_config = config.get_table("clients").unwrap();
     let clients = clients_config
         .into_iter()
-        .map(|(name, address)| Client {
-            name: name,
-            address: address.into_str().unwrap(),
-            client: HttpClient::new().unwrap(),
+        .map(|(client_id, address)| {
+            (
+                client_id.clone(),
+                Client {
+                    id: client_id.clone(),
+                    address: address.into_str().unwrap(),
+                    client: HttpClient::new().unwrap(),
+                },
+            )
         })
         .collect();
 

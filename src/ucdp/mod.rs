@@ -1,5 +1,5 @@
 pub struct Client {
-    pub name: String,
+    pub id: String,
     pub address: String,
     pub client: isahc::HttpClient,
 }
