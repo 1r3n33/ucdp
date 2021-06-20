@@ -1,15 +1,18 @@
 use actix_web::{post, web, App, Error, HttpResponse, HttpServer};
 use isahc::{prelude::*, HttpClient};
 
+mod ucdp;
+use crate::ucdp::Client;
+
 struct AppState {
-    clients: Vec<isahc::HttpClient>,
+    clients: Vec<Client>,
 }
 
 #[post("/")]
 async fn proxy(req_body: String, data: web::Data<AppState>) -> Result<HttpResponse, Error> {
-    let mut result = data.clients[0]
-        .post("http://127.0.0.1:8090", req_body)
-        .unwrap();
+    let client = &data.clients[0];
+
+    let mut result = client.client.post(&client.address, req_body).unwrap();
 
     Ok(HttpResponse::Ok().body(result.text()?))
 }
@@ -26,7 +29,11 @@ async fn main() -> std::io::Result<()> {
     let clients_config = config.get_table("clients").unwrap();
     let clients = clients_config
         .into_iter()
-        .map(|_| HttpClient::new().unwrap())
+        .map(|(name, address)| Client {
+            name: name,
+            address: address.into_str().unwrap(),
+            client: HttpClient::new().unwrap(),
+        })
         .collect();
 
     let state = web::Data::new(AppState { clients: clients });
