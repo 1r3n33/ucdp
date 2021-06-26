@@ -9,5 +9,5 @@ edition = "2018"
 [dependencies]
 actix-web = "3"
 config = "0.11"
-isahc = "1.4"
+futures = "0.3"
 rdkafka = { version = "0.25", features = ["cmake-build"] }

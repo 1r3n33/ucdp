@@ -1,26 +1,20 @@
 use actix_web::{post, web, App, Error, HttpResponse, HttpServer};
-use rdkafka::producer::FutureRecord;
+use futures::executor::block_on;
+use std::thread;
 use std::time::Duration;
 
 mod ucdp;
-use ucdp::KafkaStreamProducer;
 
 struct AppState {
-    kafka_stream_producer: KafkaStreamProducer,
+    kafka_stream_producer: ucdp::KafkaStreamProducer,
 }
 
 #[post("/")]
-async fn proxy(req_body: String, data: web::Data<AppState>) -> Result<HttpResponse, Error> {
-    let _ = data
-        .kafka_stream_producer
-        .producer
-        .send(
-            FutureRecord::to(&data.kafka_stream_producer.topic)
-                .payload(&req_body)
-                .key(&String::from("key")),
-            Duration::from_secs(0),
-        )
-        .await;
+async fn proxy(data: String, state: web::Data<AppState>) -> Result<HttpResponse, Error> {
+    std::thread::spawn(move || {
+        thread::sleep(Duration::from_secs(1));
+        block_on(state.kafka_stream_producer.produce_async(data));
+    });
 
     Ok(HttpResponse::Ok().finish())
 }

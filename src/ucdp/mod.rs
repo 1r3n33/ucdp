@@ -1,13 +1,23 @@
-#[derive(Debug)]
-pub struct Client {
-    pub id: String,
-    pub address: String,
-    pub client: isahc::HttpClient,
-}
+use rdkafka::producer::FutureRecord;
+use std::time::Duration;
 
 pub struct KafkaStreamProducer {
     pub topic: String,
     pub producer: rdkafka::producer::FutureProducer,
+}
+
+impl KafkaStreamProducer {
+    pub async fn produce_async(&self, data: String) {
+        let _ = self
+            .producer
+            .send(
+                FutureRecord::to(&self.topic)
+                    .payload(&data)
+                    .key(&String::from("key")),
+                Duration::from_secs(0),
+            )
+            .await;
+    }
 }
 
 pub struct Config {
@@ -42,23 +52,41 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt;
 
-    impl PartialEq for Client {
+    impl PartialEq for KafkaStreamProducer {
         fn eq(&self, other: &Self) -> bool {
-            self.id == other.id && self.address == other.address
+            self.topic == other.topic
+        }
+    }
+
+    impl fmt::Debug for KafkaStreamProducer {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{:?}", self.topic)
         }
     }
 
     fn config() -> Config {
         let mut config = config::Config::default();
         config.set("server.bind", "0.0.0.0:0000").unwrap();
-        config.set("clients.first", "1.1.1.1:1111").unwrap();
-        config.set("clients.second", "2.2.2.2:2222").unwrap();
+        config.set("stream.kafka.broker", "1.1.1.1:1111").unwrap();
+        config.set("stream.kafka.topic", "kafka_topic").unwrap();
         return Config { config: config };
     }
 
     #[test]
     fn config_get_server_binding_address() {
         assert_eq!(config().get_server_binding_address(), "0.0.0.0:0000");
+    }
+
+    #[test]
+    fn config_get_kafka_stream_producer() {
+        assert_eq!(
+            config().get_kafka_stream_producer(),
+            KafkaStreamProducer {
+                topic: String::from("kafka_topic"),
+                producer: rdkafka::config::ClientConfig::new().create().unwrap(),
+            }
+        )
     }
 }
