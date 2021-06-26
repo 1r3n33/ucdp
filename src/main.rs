@@ -1,25 +1,28 @@
 use actix_web::{post, web, App, Error, HttpResponse, HttpServer};
-use isahc::prelude::ReadResponseExt;
-use std::collections::HashMap;
+use rdkafka::producer::FutureRecord;
+use std::time::Duration;
 
 mod ucdp;
-use ucdp::Client;
+use ucdp::KafkaStreamProducer;
 
 struct AppState {
-    clients: HashMap<String, Client>,
+    kafka_stream_producer: KafkaStreamProducer,
 }
 
-#[post("/{client_id}")]
-async fn proxy(
-    req_body: String,
-    client_id: web::Path<String>,
-    data: web::Data<AppState>,
-) -> Result<HttpResponse, Error> {
-    let client = &data.clients[client_id.as_str()];
+#[post("/")]
+async fn proxy(req_body: String, data: web::Data<AppState>) -> Result<HttpResponse, Error> {
+    let _ = data
+        .kafka_stream_producer
+        .producer
+        .send(
+            FutureRecord::to(&data.kafka_stream_producer.topic)
+                .payload(&req_body)
+                .key(&String::from("key")),
+            Duration::from_secs(0),
+        )
+        .await;
 
-    let mut result = client.client.post(&client.address, req_body).unwrap();
-
-    Ok(HttpResponse::Ok().body(result.text()?))
+    Ok(HttpResponse::Ok().finish())
 }
 
 #[actix_web::main]
@@ -27,7 +30,7 @@ async fn main() -> std::io::Result<()> {
     let config = ucdp::Config::new(String::from("config/Main"));
 
     let state = web::Data::new(AppState {
-        clients: config.get_clients(),
+        kafka_stream_producer: config.get_kafka_stream_producer(),
     });
 
     HttpServer::new(move || App::new().app_data(state.clone()).service(proxy))

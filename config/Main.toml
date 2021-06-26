@@ -1,7 +1,7 @@
 [server]
 bind = "127.0.0.1:8080"
 
-[clients]
-client0 = "http://127.0.0.1:8090"
-client1 = "http://127.0.0.1:8091"
-client2 = "http://127.0.0.1:8092"
+[stream]
+connector = "kafka"
+kafka.broker = "127.0.0.1:9092"
+kafka.topic = "events"
