@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 actix-web = "3"
+async-trait = "0.1.50"
 config = "0.11"
 futures = "0.3"
 rdkafka = { version = "0.25", features = ["cmake-build"] }

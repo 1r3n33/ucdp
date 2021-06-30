@@ -1793,6 +1793,7 @@ name = "ucdp-server"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "async-trait",
  "config",
  "futures",
  "rdkafka",
