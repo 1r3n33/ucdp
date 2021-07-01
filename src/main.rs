@@ -6,7 +6,7 @@ use std::time::Duration;
 mod ucdp;
 
 struct AppState {
-    kafka_stream_producer: Box<dyn ucdp::StreamProducer>,
+    kafka_stream_producer: Box<dyn ucdp::stream::StreamProducer>,
 }
 
 #[post("/")]
@@ -21,10 +21,10 @@ async fn proxy(data: String, state: web::Data<AppState>) -> Result<HttpResponse,
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let config = ucdp::Config::new(String::from("config/Main"));
+    let config = ucdp::config::Config::new(String::from("config/Main"));
 
     let state = web::Data::new(AppState {
-        kafka_stream_producer: Box::new(config.get_kafka_stream_producer()),
+        kafka_stream_producer: Box::new(config.get_stream_producer()),
     });
 
     HttpServer::new(move || App::new().app_data(state.clone()).service(proxy))
