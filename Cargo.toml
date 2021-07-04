@@ -7,8 +7,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix-cors = "0.5"
 actix-web = "3"
 async-trait = "0.1.50"
 config = "0.11"
 futures = "0.3"
 rdkafka = { version = "0.25", features = ["cmake-build"] }
+serde = "1.0.126"
