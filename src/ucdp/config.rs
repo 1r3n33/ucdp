@@ -7,12 +7,12 @@ pub struct Config {
 impl Config {
     pub fn new(path: String) -> Self {
         let mut config = config::Config::default();
-        config.merge(config::File::with_name(&path)).unwrap();
-        return Config { config: config };
+        let _ = config.merge(config::File::with_name(&path));
+        Config { config }
     }
 
     pub fn get_server_binding_address(&self) -> String {
-        return self.config.get_str("server.bind").unwrap();
+        self.config.get_str("server.bind").unwrap()
     }
 
     pub fn get_stream_producer(&self) -> KafkaStreamProducer {
@@ -51,7 +51,7 @@ mod tests {
         config.set("server.bind", "0.0.0.0:0000").unwrap();
         config.set("stream.kafka.broker", "1.1.1.1:1111").unwrap();
         config.set("stream.kafka.topic", "kafka_topic").unwrap();
-        return Config { config: config };
+        Config { config }
     }
 
     #[test]

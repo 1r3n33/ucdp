@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
   title: UCDP
-  description: 'UCDP API.'
+  description: "UCDP API."
   contact:
     email: apiteam@ucdp.com
   version: 0.0.0
@@ -9,18 +9,18 @@ externalDocs:
   description: Find out more about UCPD
   url: https://github.com/1r3n33/ucdp-server
 servers:
-- url: http://localhost:8080/v1
+  - url: http://localhost:8080/v1
 tags:
-- name: events
-  description: Everything about events
-  externalDocs:
-    description: Find out more
-    url: http://swagger.io
+  - name: events
+    description: Everything about events
+    externalDocs:
+      description: Find out more
+      url: http://swagger.io
 paths:
   /events:
     post:
       tags:
-      - events
+        - events
       summary: Send events
       operationId: sendEvents
       requestBody:
@@ -30,7 +30,7 @@ paths:
             schema:
               type: array
               items:
-                $ref: '#/components/schemas/Event'
+                $ref: "#/components/schemas/Event"
         required: true
       responses:
         200:
@@ -38,25 +38,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/OkResponse'
+                $ref: "#/components/schemas/OkResponse"
         400:
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     Event:
       required:
-      - name
+        - name
       type: object
       properties:
         name:
           type: string
     OkResponse:
       required:
-      - token
+        - token
       type: object
       properties:
         token:
