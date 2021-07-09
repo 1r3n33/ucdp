@@ -14,3 +14,4 @@ config = "0.11"
 futures = "0.3"
 rdkafka = { version = "0.25", features = ["cmake-build"] }
 serde = "1.0.126"
+uuid = { version = "0.8", features = ["serde", "v4"] }

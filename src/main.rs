@@ -1,9 +1,10 @@
 use actix_cors::Cors;
-use actix_web::{http::header, post, web, App, Error, HttpResponse, HttpServer};
+use actix_web::{http::header, post, web, App, Error, HttpServer};
 use futures::executor::block_on;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::thread;
 use std::time::Duration;
+use uuid::Uuid;
 
 mod ucdp;
 
@@ -16,17 +17,28 @@ struct Event {
     name: String,
 }
 
+#[derive(Serialize)]
+struct OkResponse {
+    token: String,
+}
+
 #[post("/v1/events")]
 async fn proxy(
     events: web::Json<Vec<Event>>,
     state: web::Data<AppState>,
-) -> Result<HttpResponse, Error> {
+) -> Result<web::Json<OkResponse>, Error> {
+    // Create a new token
+    let token = Uuid::new_v4();
+
+    // Post events to stream
     std::thread::spawn(move || {
         thread::sleep(Duration::from_secs(1));
         block_on(state.stream_producer.produce(events[0].name.clone()));
     });
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(web::Json(OkResponse {
+        token: token.to_hyphenated().to_string(),
+    }))
 }
 
 #[actix_web::main]
