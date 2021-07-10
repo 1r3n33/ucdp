@@ -1,7 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{http::header, post, web, App, Error, HttpServer};
 use futures::executor::block_on;
-use serde::{Deserialize, Serialize};
 use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
@@ -12,21 +11,11 @@ struct AppState {
     stream_producer: Box<dyn ucdp::stream::StreamProducer>,
 }
 
-#[derive(Deserialize)]
-struct Event {
-    name: String,
-}
-
-#[derive(Serialize)]
-struct OkResponse {
-    token: String,
-}
-
 #[post("/v1/events")]
 async fn proxy(
-    events: web::Json<Vec<Event>>,
+    events: web::Json<Vec<ucdp::api::Event>>,
     state: web::Data<AppState>,
-) -> Result<web::Json<OkResponse>, Error> {
+) -> Result<web::Json<ucdp::api::OkResponse>, Error> {
     // Create a new token
     let token = Uuid::new_v4();
 
@@ -36,7 +25,7 @@ async fn proxy(
         block_on(state.stream_producer.produce(events[0].name.clone()));
     });
 
-    Ok(web::Json(OkResponse {
+    Ok(web::Json(ucdp::api::OkResponse {
         token: token.to_hyphenated().to_string(),
     }))
 }
