@@ -17,17 +17,20 @@ async fn proxy(
     state: web::Data<AppState>,
 ) -> Result<web::Json<ucdp::api::OkResponse>, Error> {
     // Create a new token
-    let token = Uuid::new_v4();
+    let token = Uuid::new_v4().to_hyphenated().to_string();
 
     // Post events to stream
+    let token_for_closure = token.clone();
     std::thread::spawn(move || {
         thread::sleep(Duration::from_secs(1));
-        block_on(state.stream_producer.produce(events[0].name.clone()));
+        block_on(
+            state
+                .stream_producer
+                .produce(&token_for_closure, &events[0]),
+        );
     });
 
-    Ok(web::Json(ucdp::api::OkResponse {
-        token: token.to_hyphenated().to_string(),
-    }))
+    Ok(web::Json(ucdp::api::OkResponse { token }))
 }
 
 #[actix_web::main]
