@@ -1,5 +1,7 @@
 use crate::ucdp::stream::KafkaStreamProducer;
+use crate::ucdp::stream::StreamProducer;
 
+#[derive(Clone)]
 pub struct Config {
     config: config::Config,
 }
@@ -15,7 +17,7 @@ impl Config {
         self.config.get_str("server.bind").unwrap()
     }
 
-    pub fn get_stream_producer(&self) -> KafkaStreamProducer {
+    fn get_kafka_stream_producer(&self) -> KafkaStreamProducer {
         KafkaStreamProducer {
             topic: self.config.get_str("stream.kafka.topic").unwrap(),
             producer: rdkafka::config::ClientConfig::new()
@@ -26,6 +28,10 @@ impl Config {
                 .create()
                 .expect("Kafka producer creation error"),
         }
+    }
+
+    pub fn get_stream_producer(&self) -> Box<dyn StreamProducer> {
+        Box::new(self.get_kafka_stream_producer())
     }
 }
 
@@ -62,7 +68,7 @@ mod tests {
     #[test]
     fn config_get_kafka_stream_producer() {
         assert_eq!(
-            config().get_stream_producer(),
+            config().get_kafka_stream_producer(),
             KafkaStreamProducer {
                 topic: String::from("kafka_topic"),
                 producer: rdkafka::config::ClientConfig::new().create().unwrap(),

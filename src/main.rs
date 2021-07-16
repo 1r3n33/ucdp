@@ -1,5 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{http::header, post, web, App, Error, HttpServer};
+use crossbeam_channel::{select, unbounded};
 use futures::executor::block_on;
 use std::thread;
 use std::time::Duration;
@@ -8,7 +9,7 @@ use uuid::Uuid;
 mod ucdp;
 
 struct AppState {
-    stream_producer: Box<dyn ucdp::stream::StreamProducer>,
+    sender: crossbeam_channel::Sender<ucdp::api::Event>,
 }
 
 #[post("/v1/events")]
@@ -19,28 +20,34 @@ async fn proxy(
     // Create a new token
     let token = Uuid::new_v4().to_hyphenated().to_string();
 
-    // Post events to stream
-    let token_for_closure = token.clone();
-    std::thread::spawn(move || {
-        thread::sleep(Duration::from_secs(1));
-        block_on(
-            state
-                .stream_producer
-                .produce(&token_for_closure, &events[0]),
-        );
-    });
+    let _ = state.sender.send(events[0].clone());
 
     Ok(web::Json(ucdp::api::OkResponse { token }))
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    let (sender, receiver) = unbounded::<ucdp::api::Event>();
+
     let config = ucdp::config::Config::new(String::from("config/Main"));
 
-    let state = web::Data::new(AppState {
-        stream_producer: Box::new(config.get_stream_producer()),
+    let config_for_receiver_thread = config.clone();
+    thread::spawn(move || {
+        let stream_producer = config_for_receiver_thread.get_stream_producer();
+        loop {
+            select! {
+                recv(receiver) -> res => {
+                    if let Ok(event) = res {
+                        thread::sleep(Duration::from_secs(3));
+                        println!("{}", event.name);
+                        block_on(stream_producer.produce("token: &str", &event));
+                    }
+                }
+            }
+        }
     });
 
+    let state = web::Data::new(AppState { sender });
     HttpServer::new(move || {
         App::new().app_data(state.clone()).service(proxy).wrap(
             Cors::default()

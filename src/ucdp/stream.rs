@@ -4,7 +4,7 @@ use rdkafka::producer::FutureRecord;
 use std::time::Duration;
 
 #[async_trait]
-pub trait StreamProducer: Send + Sync {
+pub trait StreamProducer {
     async fn produce(&self, token: &str, event: &Event);
 }
 
