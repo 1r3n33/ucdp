@@ -9,7 +9,7 @@ use uuid::Uuid;
 mod ucdp;
 
 struct AppState {
-    sender: crossbeam_channel::Sender<ucdp::api::Event>,
+    sender: crossbeam_channel::Sender<ucdp::stream::Events>,
 }
 
 #[post("/v1/events")]
@@ -20,27 +20,34 @@ async fn proxy(
     // Create a new token
     let token = Uuid::new_v4().to_hyphenated().to_string();
 
-    let _ = state.sender.send(events[0].clone());
+    // Send events. Do not wait.
+    let events = ucdp::stream::Events {
+        token: token.clone(),
+        events: events.to_vec(),
+    };
+    let _ = state.sender.send(events);
 
+    // Respond immediately
     Ok(web::Json(ucdp::api::OkResponse { token }))
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let (sender, receiver) = unbounded::<ucdp::api::Event>();
+    let (sender, receiver) = unbounded::<ucdp::stream::Events>();
 
     let config = ucdp::config::Config::new(String::from("config/Main"));
 
+    // Start thread that will receive events to send them to the stream
     let config_for_stream_producer_loop = config.clone();
     let stream_producer_loop = async move {
         let stream_producer = config_for_stream_producer_loop.get_stream_producer();
         loop {
             select! {
                 recv(receiver) -> res => {
-                    if let Ok(event) = res {
+                    if let Ok(events) = res {
                         thread::sleep(Duration::from_secs(3));
-                        println!("{}", event.name);
-                        stream_producer.produce("token: &str", &event).await;
+                        println!("{}", events.token);
+                        stream_producer.produce(&events).await;
                     }
                 }
             }
@@ -48,6 +55,7 @@ async fn main() -> std::io::Result<()> {
     };
     thread::spawn(|| block_on(stream_producer_loop));
 
+    // Start web service
     let state = web::Data::new(AppState { sender });
     HttpServer::new(move || {
         App::new().app_data(state.clone()).service(proxy).wrap(
