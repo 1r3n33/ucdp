@@ -31,21 +31,22 @@ async fn main() -> std::io::Result<()> {
 
     let config = ucdp::config::Config::new(String::from("config/Main"));
 
-    let config_for_receiver_thread = config.clone();
-    thread::spawn(move || {
-        let stream_producer = config_for_receiver_thread.get_stream_producer();
+    let config_for_stream_producer_loop = config.clone();
+    let stream_producer_loop = async move {
+        let stream_producer = config_for_stream_producer_loop.get_stream_producer();
         loop {
             select! {
                 recv(receiver) -> res => {
                     if let Ok(event) = res {
                         thread::sleep(Duration::from_secs(3));
                         println!("{}", event.name);
-                        block_on(stream_producer.produce("token: &str", &event));
+                        stream_producer.produce("token: &str", &event).await;
                     }
                 }
             }
         }
-    });
+    };
+    thread::spawn(|| block_on(stream_producer_loop));
 
     let state = web::Data::new(AppState { sender });
     HttpServer::new(move || {
