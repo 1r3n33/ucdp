@@ -1,9 +1,6 @@
 use actix_cors::Cors;
 use actix_web::{http::header, post, web, App, Error, HttpServer};
-use crossbeam_channel::{select, unbounded};
-use futures::executor::block_on;
-use std::thread;
-use std::time::Duration;
+use crossbeam_channel::unbounded;
 use uuid::Uuid;
 
 mod ucdp;
@@ -38,22 +35,7 @@ async fn main() -> std::io::Result<()> {
     let config = ucdp::config::Config::new(String::from("config/Main"));
 
     // Start thread that will receive events to send them to the stream
-    let config_for_stream_producer_loop = config.clone();
-    let stream_producer_loop = async move {
-        let stream_producer = config_for_stream_producer_loop.get_stream_producer();
-        loop {
-            select! {
-                recv(receiver) -> res => {
-                    if let Ok(events) = res {
-                        thread::sleep(Duration::from_secs(3));
-                        println!("{}", events.token);
-                        stream_producer.produce(&events).await;
-                    }
-                }
-            }
-        }
-    };
-    thread::spawn(|| block_on(stream_producer_loop));
+    ucdp::stream::spawn_stream_producer_thread(receiver);
 
     // Start web service
     let state = web::Data::new(AppState { sender });
