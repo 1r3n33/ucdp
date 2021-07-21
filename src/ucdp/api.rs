@@ -9,3 +9,8 @@ pub struct Event {
 pub struct OkResponse {
     pub token: String,
 }
+
+#[derive(Serialize)]
+pub struct ErrorResponse {
+    pub error: String,
+}

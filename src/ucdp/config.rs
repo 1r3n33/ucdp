@@ -1,5 +1,4 @@
-use crate::ucdp::stream::KafkaStreamProducer;
-use crate::ucdp::stream::StreamProducer;
+use crate::ucdp::stream::{KafkaStreamProducer, StreamProducer};
 
 #[derive(Clone)]
 pub struct Config {

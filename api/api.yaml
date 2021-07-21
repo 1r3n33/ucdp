@@ -62,9 +62,9 @@ components:
         token:
           type: string
     ErrorResponse:
+      required:
+        - error
       type: object
       properties:
-        errors:
-          type: array
-          items:
-            type: string
+        error:
+          type: string
