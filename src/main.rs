@@ -4,6 +4,8 @@ mod ucdp;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     let (sender, receiver) = unbounded::<ucdp::stream::Events>();
 
     // Start thread that will receive events to send them to the stream

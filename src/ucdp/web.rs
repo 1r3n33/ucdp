@@ -2,6 +2,7 @@ use crate::ucdp::api::{ErrorResponse, Event, OkResponse};
 use crate::ucdp::config::Config;
 use crate::ucdp::stream::Events;
 use actix_cors::Cors;
+use actix_web::middleware::Logger;
 use actix_web::{http::header, post, web, App, HttpResponse, HttpServer};
 use uuid::Uuid;
 
@@ -41,13 +42,17 @@ pub async fn run_http_server(sender: crossbeam_channel::Sender<Events>) -> std::
 
     let state = web::Data::new(AppState { sender });
     HttpServer::new(move || {
-        App::new().app_data(state.clone()).service(proxy).wrap(
-            Cors::default()
-                .allow_any_origin()
-                .allowed_methods(vec!["POST"])
-                .allowed_headers(vec![header::ACCEPT, header::CONTENT_TYPE])
-                .max_age(3600),
-        )
+        App::new()
+            .app_data(state.clone())
+            .service(proxy)
+            .wrap(Logger::default())
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allowed_methods(vec!["POST"])
+                    .allowed_headers(vec![header::ACCEPT, header::CONTENT_TYPE])
+                    .max_age(3600),
+            )
     })
     .bind(config.get_server_binding_address())?
     .run()
