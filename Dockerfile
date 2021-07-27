@@ -18,3 +18,9 @@ COPY src /tmp/src
 
 RUN cargo build --manifest-path=/tmp/Cargo.toml
 RUN cargo test --manifest-path=/tmp/Cargo.toml
+
+# Copy resources for run
+COPY config /tmp/config
+
+WORKDIR /tmp
+CMD cargo run --manifest-path=/tmp/Cargo.toml
