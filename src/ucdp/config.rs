@@ -1,3 +1,4 @@
+use config::Environment;
 use crate::ucdp::stream::{KafkaStreamProducer, StreamProducer};
 
 #[derive(Clone)]
@@ -9,6 +10,8 @@ impl Config {
     pub fn new(path: String) -> Self {
         let mut config = config::Config::default();
         let _ = config.merge(config::File::with_name(&path));
+        let _ = config.merge(Environment::with_prefix("ucdp").separator("_").ignore_empty(true));
+
         Config { config }
     }
 
