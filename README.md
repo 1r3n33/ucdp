@@ -1,21 +1,25 @@
 > **ucdp** is a micro customer data platform
 
+## Build ucdp docker image
+
+```console
+$ sudo docker build . -t ucdp --no-cache --pull
+```
+
 ## Run a docker ucdp with a local kafka
 
 ```console
-$ sudo docker build . -t ucdp
+$ sudo docker run --rm -t -i --network=host --env UCDP_STREAM_KAFKA_BROKER=127.0.0.1:9092 ucdp
 ```
 
-```console
-$ sudo docker run --rm -t -i --network=host ucdp
-```
-
-## Run a local ucdp with a docker-compose kafka 
+## Run with docker-compose
 
 ```console
 $ sudo docker-compose up
 ```
 
+## Send an event request to ucdp
+
 ```console
-$ UCDP_STREAM_KAFKA_BROKER=127.0.0.1:29092 cargo run
+curl -X 'POST' 'http://0.0.0.0:8080/v1/events' -H 'accept: application/json' -H 'Content-Type: application/json' -d '[{"name":"abc"}]' -v | jq .
 ```

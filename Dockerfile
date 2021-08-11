@@ -19,8 +19,14 @@ COPY src /tmp/src
 RUN cargo build --manifest-path=/tmp/Cargo.toml
 RUN cargo test --manifest-path=/tmp/Cargo.toml
 
-# Copy resources for run
+# Copy resources for execution
+COPY scripts /tmp/scripts
+RUN chmod +x /tmp/scripts/docker-entrypoint.sh
+RUN chmod +x /tmp/scripts/wait-for-it.sh
+
 COPY config /tmp/config
 
 WORKDIR /tmp
-CMD cargo run --manifest-path=/tmp/Cargo.toml
+
+ENTRYPOINT [ "/tmp/scripts/docker-entrypoint.sh" ]
+CMD [ "cargo", "run", "--manifest-path=/tmp/Cargo.toml" ]
