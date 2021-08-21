@@ -5,7 +5,9 @@ RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y \
     build-essential \
     cmake \
-    curl
+    curl \
+    libssl-dev \
+    pkg-config
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
