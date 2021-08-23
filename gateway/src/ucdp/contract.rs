@@ -1,18 +1,43 @@
+use async_trait::async_trait;
 use std::str::FromStr;
 use web3::contract::Options;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Partner {
     pub name: String,
     pub enabled: bool,
 }
 
-pub struct Contract {
-    pub contract: web3::contract::Contract<web3::transports::Http>,
+#[async_trait]
+pub trait Queries {
+    async fn get_partner(
+        &self,
+        address: web3::types::Address,
+    ) -> web3::contract::Result<(Vec<u8>, bool)>;
 }
 
-impl Contract {
-    pub fn new(address: &str, json: &[u8]) -> Self {
+struct Web3ContractQueries {
+    contract: web3::contract::Contract<web3::transports::Http>,
+}
+
+#[async_trait]
+impl Queries for Web3ContractQueries {
+    async fn get_partner(
+        &self,
+        address: web3::types::Address,
+    ) -> web3::contract::Result<(Vec<u8>, bool)> {
+        self.contract
+            .query("partners", (address,), None, Options::default(), None)
+            .await
+    }
+}
+
+pub struct Contract<T: Queries> {
+    queries: T,
+}
+
+impl Contract<Web3ContractQueries> {
+    pub fn new(address: &str, json: &[u8]) -> Contract<Web3ContractQueries> {
         let http = web3::transports::Http::new("http://localhost:9545").unwrap();
         let web3 = web3::Web3::new(http);
         let contract = web3::contract::Contract::from_json(
@@ -21,19 +46,16 @@ impl Contract {
             json,
         )
         .unwrap();
-        Contract { contract }
+        let queries = Web3ContractQueries { contract };
+        Contract { queries }
     }
+}
 
+impl<T: Queries> Contract<T> {
     pub async fn get_partner(&self, address: &str) -> Partner {
-        let res: Result<(Vec<u8>, bool), _> = self
-            .contract
-            .query(
-                "partners",
-                (web3::types::Address::from_str(address).unwrap_or_default(),),
-                None,
-                Options::default(),
-                None,
-            )
+        let res = self
+            .queries
+            .get_partner(web3::types::Address::from_str(address).unwrap_or_default())
             .await;
         let (name, enabled) = res.unwrap_or_default();
         Partner {
@@ -46,11 +68,12 @@ impl Contract {
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use crate::ucdp::contract::Contract;
     use crate::ucdp::contract::Partner;
+    use crate::ucdp::contract::Queries;
+    use async_trait::async_trait;
 
     impl PartialEq for Partner {
         fn eq(&self, other: &Self) -> bool {
@@ -58,8 +81,9 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[actix_rt::test]
-    async fn contract_get_partner() {
+    async fn contract_get_partner_network() {
         let contract = Contract::new(
             "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b",
             include_bytes!("../../../smart-contracts/build/contracts/abi/Ucdp.abi.json"),
@@ -87,5 +111,42 @@ mod tests {
             }
         );
     }
+
+    struct TestQueries {
+        pub partner: Partner,
+    }
+
+    #[async_trait]
+    impl Queries for TestQueries {
+        async fn get_partner(
+            &self,
+            _: web3::types::Address,
+        ) -> web3::contract::Result<(Vec<u8>, bool)> {
+            web3::contract::Result::Ok((
+                self.partner.name.as_bytes().to_vec(),
+                self.partner.enabled,
+            ))
+        }
+    }
+
+    #[actix_rt::test]
+    async fn contract_get_partner() {
+        let input_partner = Partner {
+            name: "hello".into(),
+            enabled: true,
+        };
+
+        let expected_partner = input_partner.clone();
+
+        let queries = TestQueries {
+            partner: input_partner,
+        };
+
+        let contract = Contract { queries };
+
+        let resolved_partner = contract
+            .get_partner("0x8888888888888888888888888888888888888888")
+            .await;
+        assert_eq!(resolved_partner, expected_partner);
+    }
 }
-*/
