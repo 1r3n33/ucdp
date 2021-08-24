@@ -14,21 +14,23 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Copy project sources for build
-COPY Cargo.toml /tmp/
-COPY src /tmp/src
+# Copy resources for build and test
+RUN mkdir -p /ucdp/gateway
+COPY Cargo.toml /ucdp/gateway
+COPY src /ucdp/gateway/src
+COPY res /ucdp/gateway/res
 
-RUN cargo build --manifest-path=/tmp/Cargo.toml
-RUN cargo test --manifest-path=/tmp/Cargo.toml
+RUN cargo build --manifest-path=/ucdp/gateway/Cargo.toml
+RUN cargo test --manifest-path=/ucdp/gateway/Cargo.toml
 
 # Copy resources for execution
-COPY scripts /tmp/scripts
-RUN chmod +x /tmp/scripts/docker-entrypoint.sh
-RUN chmod +x /tmp/scripts/wait-for-it.sh
+COPY scripts /ucdp/gateway/scripts
+RUN chmod +x /ucdp/gateway/scripts/docker-entrypoint.sh
+RUN chmod +x /ucdp/gateway/scripts/wait-for-it.sh
 
-COPY config /tmp/config
+COPY config /ucdp/gateway/config
 
-WORKDIR /tmp
+WORKDIR /ucdp/gateway
 
-ENTRYPOINT [ "/tmp/scripts/docker-entrypoint.sh" ]
-CMD [ "cargo", "run", "--manifest-path=/tmp/Cargo.toml" ]
+ENTRYPOINT [ "/ucdp/gateway/scripts/docker-entrypoint.sh" ]
+CMD [ "cargo", "run", "--manifest-path=/ucdp/gateway/Cargo.toml" ]

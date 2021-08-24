@@ -86,7 +86,7 @@ mod tests {
     async fn contract_get_partner_network() {
         let contract = Contract::new(
             "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b",
-            include_bytes!("../../../smart-contracts/build/contracts/abi/Ucdp.abi.json"),
+            include_bytes!("../../res/Ucdp.abi.json"),
         );
 
         let registered_partner = contract
