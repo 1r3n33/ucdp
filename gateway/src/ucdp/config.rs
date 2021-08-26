@@ -1,17 +1,28 @@
-use config::Environment;
 use crate::ucdp::stream::{KafkaStreamProducer, StreamProducer};
+use config::Environment;
 
 #[derive(Clone)]
 pub struct Config {
     config: config::Config,
 }
 
+pub struct Error {}
+
 impl Config {
     pub fn new(path: String) -> Self {
         let mut config = config::Config::default();
         let _ = config.merge(config::File::with_name(&path));
-        let _ = config.merge(Environment::with_prefix("ucdp").separator("_").ignore_empty(true));
+        let _ = config.merge(
+            Environment::with_prefix("ucdp")
+                .separator("_")
+                .ignore_empty(false),
+        );
 
+        Config { config }
+    }
+
+    // Used for tests
+    pub(in crate) fn from(config: config::Config) -> Self {
         Config { config }
     }
 
@@ -34,6 +45,10 @@ impl Config {
 
     pub fn get_stream_producer(&self) -> Box<dyn StreamProducer> {
         Box::new(self.get_kafka_stream_producer())
+    }
+
+    pub fn get_str(&self, key: &str) -> Result<String, Error> {
+        self.config.get_str(key).map_err(|_| Error {})
     }
 }
 
@@ -76,5 +91,27 @@ mod tests {
                 producer: rdkafka::config::ClientConfig::new().create().unwrap(),
             }
         )
+    }
+
+    impl PartialEq for Error {
+        fn eq(&self, _: &Self) -> bool {
+            true
+        }
+    }
+
+    impl fmt::Debug for Error {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "Error")
+        }
+    }
+
+    #[test]
+    fn config_get_str() {
+        let mut config = config::Config::default();
+        let _ = config.set("abc", "123");
+
+        let config = Config { config };
+        assert_eq!(config.get_str("abc"), Ok("123".into()));
+        assert_eq!(config.get_str("def"), Err(Error {}));
     }
 }

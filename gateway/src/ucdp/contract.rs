@@ -1,3 +1,4 @@
+use crate::ucdp::config::Config;
 use async_trait::async_trait;
 use std::str::FromStr;
 use web3::contract::Options;
@@ -37,13 +38,20 @@ pub struct Contract<T: Queries> {
 }
 
 impl Contract<Web3ContractQueries> {
-    pub fn new(address: &str, json: &[u8]) -> Contract<Web3ContractQueries> {
-        let http = web3::transports::Http::new("http://localhost:9545").unwrap();
+    pub fn from_config(config: Config) -> Self {
+        let network = config
+            .get_str("data.partner.ethereum.network")
+            .unwrap_or_else(|_| "http://localhost:9545".into());
+        let contract_address = config
+            .get_str("data.partner.ethereum.contract")
+            .unwrap_or_else(|_| "0x0000000000000000000000000000000000000000".into());
+
+        let http = web3::transports::Http::new(network.as_str()).unwrap();
         let web3 = web3::Web3::new(http);
         let contract = web3::contract::Contract::from_json(
             web3.eth(),
-            web3::types::Address::from_str(address).unwrap_or_default(),
-            json,
+            web3::types::Address::from_str(contract_address.as_str()).unwrap_or_default(),
+            include_bytes!("../../res/Ucdp.abi.json"),
         )
         .unwrap();
         let queries = Web3ContractQueries { contract };
@@ -70,9 +78,7 @@ impl<T: Queries> Contract<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::ucdp::contract::Contract;
-    use crate::ucdp::contract::Partner;
-    use crate::ucdp::contract::Queries;
+    use crate::ucdp::contract::{Config, Contract, Partner, Queries};
     use async_trait::async_trait;
 
     impl PartialEq for Partner {
@@ -84,10 +90,15 @@ mod tests {
     #[ignore]
     #[actix_rt::test]
     async fn contract_get_partner_network() {
-        let contract = Contract::new(
+        let mut config = config::Config::default();
+        let _ = config.set("data.partner.ethereum.network", "http://localhost:9545");
+        let _ = config.set(
+            "data.partner.ethereum.contract",
             "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b",
-            include_bytes!("../../res/Ucdp.abi.json"),
         );
+        let config = Config::from(config);
+
+        let contract = Contract::from_config(config);
 
         let registered_partner = contract
             .get_partner("0x0000000000000000000000000000000000000123")

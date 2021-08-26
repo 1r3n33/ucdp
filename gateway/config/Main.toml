@@ -5,3 +5,8 @@ bind = "0.0.0.0:8080"
 connector = "kafka"
 kafka.broker = "127.0.0.1:9092"
 kafka.topic = "events"
+
+[data.partner]
+connector = "ethereum"
+ethereum.network = "127.0.0.1:9595"
+ethereum.contract = "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b"
