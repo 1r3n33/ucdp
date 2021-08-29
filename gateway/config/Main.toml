@@ -1,12 +1,12 @@
 [server]
-bind = "0.0.0.0:8080"
+bind = "127.0.0.1:8080"
 
 [stream]
 connector = "kafka"
 kafka.broker = "127.0.0.1:9092"
 kafka.topic = "events"
 
-[data.partner]
+[data.partners]
 connector = "ethereum"
-ethereum.network = "127.0.0.1:9595"
+ethereum.network = "http://127.0.0.1:9545"
 ethereum.contract = "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b"

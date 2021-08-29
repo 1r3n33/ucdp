@@ -21,11 +21,6 @@ impl Config {
         Config { config }
     }
 
-    // Used for tests
-    pub(in crate) fn from(config: config::Config) -> Self {
-        Config { config }
-    }
-
     pub fn get_server_binding_address(&self) -> String {
         self.config.get_str("server.bind").unwrap()
     }
@@ -49,6 +44,13 @@ impl Config {
 
     pub fn get_str(&self, key: &str) -> Result<String, Error> {
         self.config.get_str(key).map_err(|_| Error {})
+    }
+}
+
+#[cfg(test)]
+impl Config {
+    pub(in crate) fn from(config: config::Config) -> Self {
+        Config { config }
     }
 }
 

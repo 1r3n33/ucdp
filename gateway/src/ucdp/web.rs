@@ -1,35 +1,53 @@
-use crate::ucdp::api::{ErrorResponse, Event, OkResponse};
+use crate::ucdp::api::{ErrorResponse, OkResponse};
 use crate::ucdp::config::Config;
-use crate::ucdp::stream::Events;
+use crate::ucdp::partners::{Partners, PartnersBuilder};
 use actix_cors::Cors;
-use actix_web::middleware::Logger;
-use actix_web::{http::header, post, web, App, HttpResponse, HttpServer};
+use actix_web::{http::header, middleware::Logger, post, web, App, HttpResponse, HttpServer};
 use uuid::Uuid;
 
 struct AppState {
-    sender: crossbeam_channel::Sender<Events>,
+    sender: crossbeam_channel::Sender<crate::ucdp::stream::Events>,
+    partners: Partners,
 }
 
+// TODO move to api
 #[post("/v1/events")]
-async fn proxy(events: web::Json<Vec<Event>>, state: web::Data<AppState>) -> HttpResponse {
-    if events.len() == 0 {
+async fn proxy(
+    req: web::Json<crate::ucdp::api::Events>,
+    state: web::Data<AppState>,
+) -> HttpResponse {
+    if req.events.is_empty() {
         return HttpResponse::BadRequest().json(&ErrorResponse {
             error: String::from("Events array must not be empty."),
         });
     }
-    if events.len() > 100 {
+    if req.events.len() > 100 {
         return HttpResponse::BadRequest().json(&ErrorResponse {
             error: String::from("Events array must not be larger than 100 events."),
         });
+    }
+
+    match state.partners.get_partner(req.partner.as_str()).await {
+        Ok(partner) if !partner.enabled => {
+            return HttpResponse::Forbidden().json(&ErrorResponse {
+                error: String::from("Partner must be enabled."),
+            });
+        }
+        Err(_) => {
+            return HttpResponse::Forbidden().json(&ErrorResponse {
+                error: String::from("Partner must be set."),
+            });
+        }
+        _ => {}
     }
 
     // Create a new token
     let token = Uuid::new_v4().to_hyphenated().to_string();
 
     // Send events. Do not wait.
-    let events = Events {
+    let events = crate::ucdp::stream::Events {
         token: token.clone(),
-        events: events.to_vec(),
+        events: req.events.to_vec(),
     };
     let _ = state.sender.send(events);
 
@@ -37,15 +55,18 @@ async fn proxy(events: web::Json<Vec<Event>>, state: web::Data<AppState>) -> Htt
     HttpResponse::Ok().json(&OkResponse { token })
 }
 
-pub async fn run_http_server(sender: crossbeam_channel::Sender<Events>) -> std::io::Result<()> {
+pub async fn run_http_server(
+    sender: crossbeam_channel::Sender<crate::ucdp::stream::Events>,
+) -> std::io::Result<()> {
     let config = Config::new(String::from("config/Main"));
 
-    let state = web::Data::new(AppState { sender });
+    let state = web::Data::new(AppState {
+        sender,
+        partners: PartnersBuilder::build(&config).unwrap(),
+    });
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
-            .service(proxy)
-            .wrap(Logger::default())
             .wrap(
                 Cors::default()
                     .allow_any_origin()
@@ -53,6 +74,8 @@ pub async fn run_http_server(sender: crossbeam_channel::Sender<Events>) -> std::
                     .allowed_headers(vec![header::ACCEPT, header::CONTENT_TYPE])
                     .max_age(3600),
             )
+            .wrap(Logger::default())
+            .service(proxy)
     })
     .bind(config.get_server_binding_address())?
     .run()
@@ -61,26 +84,72 @@ pub async fn run_http_server(sender: crossbeam_channel::Sender<Events>) -> std::
 
 #[cfg(test)]
 mod tests {
-    use crate::ucdp::web::Event;
-    use crate::ucdp::web::{proxy, AppState, Events};
+    use crate::ucdp::partners::{Error, Partner, PartnersBuilderForTest, PartnersDAO};
+    use crate::ucdp::web::{proxy, AppState};
     use actix_http::http::Method;
     use actix_web::test::{init_service, TestRequest};
-    use actix_web::{dev::Service, http::StatusCode, web, App};
+    use actix_web::{dev::Service, dev::ServiceResponse, http::StatusCode, web, App};
+    use async_trait::async_trait;
     use crossbeam_channel::unbounded;
 
-    #[actix_rt::test]
-    async fn http_server_simple_request_ok() {
-        let (sender, _) = unbounded::<Events>();
-        let state = web::Data::new(AppState { sender });
-        let mut service = init_service(App::new().app_data(state.clone()).service(proxy)).await;
+    struct PartnerOptionDAO {
+        partner: Option<Partner>,
+    }
+
+    #[async_trait]
+    impl PartnersDAO for PartnerOptionDAO {
+        async fn get_partner(&self, _: &str) -> Result<Partner, Error> {
+            match self.partner.clone() {
+                Some(partner) => Ok(partner),
+                None => Err(Error {}),
+            }
+        }
+    }
+
+    async fn get_response(partner: Option<Partner>) -> ServiceResponse {
+        let (sender, _) = unbounded::<crate::ucdp::stream::Events>();
+        let state = web::Data::new(AppState {
+            sender,
+            partners: PartnersBuilderForTest::build(Box::new(PartnerOptionDAO { partner })),
+        });
+        let service = init_service(App::new().app_data(state.clone()).service(proxy)).await;
         let request = TestRequest::default()
             .uri("/v1/events")
             .method(Method::POST)
-            .set_json(&vec![Event {
-                name: String::from("event1"),
-            }])
+            .set_json(&crate::ucdp::api::Events {
+                partner: "0x0123456789".into(),
+                events: vec![crate::ucdp::api::Event {
+                    name: String::from("event1"),
+                }],
+            })
             .to_request();
         let response = service.call(request).await.unwrap();
+        response
+    }
+
+    #[actix_rt::test]
+    async fn http_server_simple_request_ok() {
+        let response = get_response(Some(Partner {
+            name: "".into(),
+            enabled: true,
+        }))
+        .await;
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[actix_rt::test]
+    async fn http_server_simple_request_err_no_partner() {
+        let response = get_response(None).await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[actix_rt::test]
+    async fn http_server_simple_request_err_partner_disabled() {
+        let response = get_response(Some(Partner {
+            name: "".into(),
+            enabled: false,
+        }))
+        .await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 }

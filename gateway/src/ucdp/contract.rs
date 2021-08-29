@@ -3,47 +3,36 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use web3::contract::Options;
 
-#[derive(Clone, Debug)]
-pub struct Partner {
-    pub name: String,
-    pub enabled: bool,
-}
+pub struct Error {}
 
 #[async_trait]
-pub trait Queries {
-    async fn get_partner(
-        &self,
-        address: web3::types::Address,
-    ) -> web3::contract::Result<(Vec<u8>, bool)>;
+pub trait EthereumContractQueries: Send + Sync {
+    async fn get_partner(&self, address: web3::types::Address) -> Result<(Vec<u8>, bool), Error>;
 }
 
-struct Web3ContractQueries {
+struct EthereumContractQueriesImpl {
     contract: web3::contract::Contract<web3::transports::Http>,
 }
 
 #[async_trait]
-impl Queries for Web3ContractQueries {
-    async fn get_partner(
-        &self,
-        address: web3::types::Address,
-    ) -> web3::contract::Result<(Vec<u8>, bool)> {
+impl EthereumContractQueries for EthereumContractQueriesImpl {
+    async fn get_partner(&self, address: web3::types::Address) -> Result<(Vec<u8>, bool), Error> {
         self.contract
             .query("partners", (address,), None, Options::default(), None)
             .await
+            .map_err(|_| Error {})
     }
 }
 
-pub struct Contract<T: Queries> {
-    queries: T,
-}
+pub struct EthereumContractQueriesBuilder {}
 
-impl Contract<Web3ContractQueries> {
-    pub fn from_config(config: Config) -> Self {
+impl EthereumContractQueriesBuilder {
+    pub fn build(config: &Config) -> Box<dyn EthereumContractQueries> {
         let network = config
-            .get_str("data.partner.ethereum.network")
+            .get_str("data.partners.ethereum.network")
             .unwrap_or_else(|_| "http://localhost:9545".into());
         let contract_address = config
-            .get_str("data.partner.ethereum.contract")
+            .get_str("data.partners.ethereum.contract")
             .unwrap_or_else(|_| "0x0000000000000000000000000000000000000000".into());
 
         let http = web3::transports::Http::new(network.as_str()).unwrap();
@@ -54,110 +43,92 @@ impl Contract<Web3ContractQueries> {
             include_bytes!("../../res/Ucdp.abi.json"),
         )
         .unwrap();
-        let queries = Web3ContractQueries { contract };
-        Contract { queries }
-    }
-}
-
-impl<T: Queries> Contract<T> {
-    pub async fn get_partner(&self, address: &str) -> Partner {
-        let res = self
-            .queries
-            .get_partner(web3::types::Address::from_str(address).unwrap_or_default())
-            .await;
-        let (name, enabled) = res.unwrap_or_default();
-        Partner {
-            name: String::from_utf8(name)
-                .unwrap_or_default()
-                .trim_end_matches(char::from(0))
-                .into(),
-            enabled,
-        }
+        Box::new(EthereumContractQueriesImpl { contract })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::ucdp::contract::{Config, Contract, Partner, Queries};
-    use async_trait::async_trait;
+    use crate::ucdp::contract::{Config, Error, EthereumContractQueriesBuilder};
+    use std::fmt;
+    use std::str::FromStr;
 
-    impl PartialEq for Partner {
-        fn eq(&self, other: &Self) -> bool {
-            self.name == other.name && self.enabled == other.enabled
+    impl PartialEq for Error {
+        fn eq(&self, _: &Self) -> bool {
+            true
         }
+    }
+
+    impl fmt::Debug for Error {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "Error")
+        }
+    }
+
+    #[actix_rt::test]
+    async fn contract_get_partner_default() {
+        let config = config::Config::default();
+        let config = Config::from(config);
+
+        let queries = EthereumContractQueriesBuilder::build(&config);
+
+        let res = queries
+            .get_partner(
+                web3::types::Address::from_str("0x8888888888888888888888888888888888888888")
+                    .unwrap_or_default(),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(res, Error {});
     }
 
     #[ignore]
     #[actix_rt::test]
     async fn contract_get_partner_network() {
         let mut config = config::Config::default();
-        let _ = config.set("data.partner.ethereum.network", "http://localhost:9545");
+        let _ = config.set("data.partners.ethereum.network", "http://localhost:9545");
         let _ = config.set(
-            "data.partner.ethereum.contract",
+            "data.partners.ethereum.contract",
             "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b",
         );
         let config = Config::from(config);
 
-        let contract = Contract::from_config(config);
+        let queries = EthereumContractQueriesBuilder::build(&config);
 
-        let registered_partner = contract
-            .get_partner("0x0000000000000000000000000000000000000123")
-            .await;
+        let res = queries
+            .get_partner(
+                web3::types::Address::from_str("0x0000000000000000000000000000000000000123")
+                    .unwrap_or_default(),
+            )
+            .await
+            .unwrap();
         assert_eq!(
-            registered_partner,
-            Partner {
-                name: "partner".into(),
-                enabled: true
-            }
+            res,
+            (
+                vec![
+                    112, 97, 114, 116, 110, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                ],
+                true
+            )
         );
 
-        let unregistered_partner = contract
-            .get_partner("0x8888888888888888888888888888888888888888")
-            .await;
+        let res = queries
+            .get_partner(
+                web3::types::Address::from_str("0x8888888888888888888888888888888888888888")
+                    .unwrap_or_default(),
+            )
+            .await
+            .unwrap();
         assert_eq!(
-            unregistered_partner,
-            Partner {
-                name: "".into(),
-                enabled: false
-            }
+            res,
+            (
+                vec![
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0
+                ],
+                false
+            )
         );
-    }
-
-    struct TestQueries {
-        pub partner: Partner,
-    }
-
-    #[async_trait]
-    impl Queries for TestQueries {
-        async fn get_partner(
-            &self,
-            _: web3::types::Address,
-        ) -> web3::contract::Result<(Vec<u8>, bool)> {
-            web3::contract::Result::Ok((
-                self.partner.name.as_bytes().to_vec(),
-                self.partner.enabled,
-            ))
-        }
-    }
-
-    #[actix_rt::test]
-    async fn contract_get_partner() {
-        let input_partner = Partner {
-            name: "hello".into(),
-            enabled: true,
-        };
-
-        let expected_partner = input_partner.clone();
-
-        let queries = TestQueries {
-            partner: input_partner,
-        };
-
-        let contract = Contract { queries };
-
-        let resolved_partner = contract
-            .get_partner("0x8888888888888888888888888888888888888888")
-            .await;
-        assert_eq!(resolved_partner, expected_partner);
     }
 }

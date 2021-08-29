@@ -1,4 +1,4 @@
-openapi: 3.0.1
+openapi: 3.0.3
 info:
   title: UCDP
   description: "UCDP API."
@@ -28,9 +28,7 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: "#/components/schemas/Event"
+              $ref: "#/components/schemas/Events"
         required: true
       responses:
         200:
@@ -45,6 +43,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        403:
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     Event:
@@ -54,6 +58,18 @@ components:
       properties:
         name:
           type: string
+    Events:
+      required:
+        - partner
+        - events
+      type: object
+      properties:
+        partner:
+          type: string
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
     OkResponse:
       required:
         - token
