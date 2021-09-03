@@ -25,8 +25,6 @@ RUN cargo test --manifest-path=/ucdp/gateway/Cargo.toml
 
 # Copy resources for execution
 COPY scripts /ucdp/gateway/scripts
-RUN chmod +x /ucdp/gateway/scripts/docker-entrypoint.sh
-RUN chmod +x /ucdp/gateway/scripts/wait-for-it.sh
 
 COPY config /ucdp/gateway/config
 
