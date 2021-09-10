@@ -1,4 +1,10 @@
-> **ucdp** is a micro customer data platform
+# ucdp
+
+> **Customer Data Platform with undisputable data integrity and user privacy**
+
+[![Ucdp](https://github.com/1r3n33/ucdp/actions/workflows/ucdp.yml/badge.svg)](https://github.com/1r3n33/ucdp/actions/workflows/ucdp.yml)
+
+![SVG](./ucdp.svg)
 
 ## Run with docker-compose
 
