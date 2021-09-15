@@ -1,3 +1,4 @@
+use crate::ucdp::cache::{CacheBuilder, CacheDao};
 use crate::ucdp::config::Config;
 use crate::ucdp::contract::{EthereumContractQueries, EthereumContractQueriesBuilder};
 use async_trait::async_trait;
@@ -39,93 +40,35 @@ impl PartnersDAO for EthereumContractPartnersDAO {
     }
 }
 
-struct AerospikeCachePartnerDAO<T: PartnersDAO> {
+struct CachePartnerDAO<T: PartnersDAO> {
     underlying_dao: T,
-    client: aerospike::Client,
-}
-
-impl<T> AerospikeCachePartnerDAO<T>
-where
-    T: PartnersDAO,
-{
-    fn new(config: &Config, dao: T) -> Result<Self, Error> {
-        let policy = aerospike::ClientPolicy::default();
-        let host = config
-            .get_str("cache.aerospike.host")
-            .unwrap_or_else(|_| "127.0.0.1:3000".into());
-        let client = aerospike::Client::new(&policy, &host);
-        client
-            .map(|client| AerospikeCachePartnerDAO {
-                client,
-                underlying_dao: dao,
-            })
-            .map_err(|_| Error {})
-    }
+    cache_dao: Box<dyn CacheDao>,
 }
 
 #[async_trait]
-impl<T> PartnersDAO for AerospikeCachePartnerDAO<T>
+impl<T> PartnersDAO for CachePartnerDAO<T>
 where
     T: PartnersDAO,
 {
     async fn get_partner(&self, address: &str) -> Result<Partner, Error> {
-        let read_policy = aerospike::ReadPolicy::default();
-        let record = self.client.get(
-            &read_policy,
-            &aerospike::as_key!("ucdp", "partners", address),
-            aerospike::Bins::All,
-        );
-        match record {
-            Ok(record) => {
-                log::trace!("record found: {:?}", record);
-
-                let data = record.bins.get("partner").unwrap();
-                let json = data.to_string();
-
-                let partner: Partner = serde_json::from_str(json.as_str()).unwrap();
-                match record.time_to_live() {
-                    Some(rem) if rem.as_secs() < 5 => {
-                        log::trace!("record expiring soon, re-fetching remote data...");
-
-                        if let Ok(partner) = self.underlying_dao.get_partner(address).await {
-                            log::trace!("remote data re-fetched, updating record...");
-
-                            let write_policy = aerospike::WritePolicy::default();
-                            let key = aerospike::as_key!("ucdp", "partners", address);
-                            let bin = aerospike::as_bin!(
-                                "partner",
-                                serde_json::to_string(&partner).unwrap()
-                            );
-                            let _ = self.client.put(&write_policy, &key, &[bin]);
-                        }
-                    }
-                    _ => {}
+        match self.cache_dao.get(address) {
+            Ok(entry) => match entry.value {
+                // Partner in cache
+                Some(bytes) => {
+                    let partner: Partner = serde_json::from_slice(&bytes).unwrap();
+                    Ok(partner)
                 }
-                Ok(partner)
-            }
-            Err(aerospike::Error(
-                aerospike::ErrorKind::ServerError(aerospike::ResultCode::KeyNotFoundError),
-                _,
-            )) => {
-                log::trace!("record not found, fetching remote data...");
-                match self.underlying_dao.get_partner(address).await {
+                // Partner not in cache: refresh data from underlying dao then put in cache
+                None => match self.underlying_dao.get_partner(address).await {
                     Ok(partner) => {
-                        log::trace!("remote data fetched, updating record...");
-                        let write_policy = aerospike::WritePolicy::default();
-                        let key = aerospike::as_key!("ucdp", "partners", address);
-                        let bin =
-                            aerospike::as_bin!("partner", serde_json::to_string(&partner).unwrap());
-                        let _ = self.client.put(&write_policy, &key, &[bin]);
-
+                        self.cache_dao
+                            .put(address, serde_json::to_vec(&partner).unwrap());
                         Ok(partner)
                     }
                     Err(_) => Err(Error {}),
-                }
-            }
-            Err(_) => {
-                log::trace!("cannot get record");
-                Err(Error {})
-            }
+                },
+            },
+            _ => Err(Error {}),
         }
     }
 }
@@ -151,13 +94,18 @@ impl PartnersBuilder {
                 };
 
                 match config.get_str("data.partners.cache") {
-                    Ok(cache) if cache == "aerospike" => {
-                        let aerospike_dao =
-                            AerospikeCachePartnerDAO::new(&config, ethereum_dao).unwrap();
-                        Ok(Partners {
-                            dao: Box::new(aerospike_dao),
-                        })
-                    }
+                    Ok(_) => match CacheBuilder::build(config, "data.partners") {
+                        Ok(cache_dao) => {
+                            let aerospike_cache_dao = CachePartnerDAO {
+                                underlying_dao: ethereum_dao,
+                                cache_dao,
+                            };
+                            Ok(Partners {
+                                dao: Box::new(aerospike_cache_dao),
+                            })
+                        }
+                        _ => Err(Error {}),
+                    },
                     _ => Ok(Partners {
                         dao: Box::new(ethereum_dao),
                     }),
