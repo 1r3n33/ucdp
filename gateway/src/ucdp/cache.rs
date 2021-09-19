@@ -73,8 +73,10 @@ impl CacheBuilder {
                     .get_str("cache.aerospike.host")
                     .unwrap_or_else(|_| "127.0.0.1:3000".into());
 
-                let aerospike_client =
-                    aerospike::Client::new(&aerospike::ClientPolicy::default(), &host);
+                let mut client_policy = aerospike::ClientPolicy::default().clone();
+                client_policy.fail_if_not_connected = false; // it makes testing easier
+
+                let aerospike_client = aerospike::Client::new(&client_policy, &host);
                 match aerospike_client {
                     Ok(client) => Ok(Box::new(AerospikeCacheDao {
                         client,
@@ -87,5 +89,31 @@ impl CacheBuilder {
             }
             _ => Err(Error {}),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ucdp::cache::CacheBuilder;
+    use crate::ucdp::config::Config;
+
+    #[test]
+    fn cachebuilder_build_aerospike_ok() {
+        let mut config = config::Config::default();
+        let _ = config.set("prefix.cache", "aerospike");
+        let config = Config::from(config);
+
+        let res = CacheBuilder::build(&config, "prefix");
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn cachebuilder_build_unknown_err() {
+        let mut config = config::Config::default();
+        let _ = config.set("prefix.cache", "does not exist");
+        let config = Config::from(config);
+
+        let res = CacheBuilder::build(&config, "prefix");
+        assert!(res.is_err());
     }
 }
