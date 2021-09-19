@@ -128,17 +128,28 @@ impl PartnersBuilderForTest {
 
 #[cfg(test)]
 mod tests {
-    use crate::ucdp::contract::Error;
+    use crate::ucdp::cache::CacheEntry;
     use crate::ucdp::partners::{
-        Config, EthereumContractPartnersDAO, EthereumContractQueries, Partner, Partners,
-        PartnersBuilder,
+        CacheDao, CachePartnerDAO, Config, EthereumContractPartnersDAO, EthereumContractQueries,
+        Partner, Partners, PartnersBuilder,
     };
     use async_trait::async_trait;
 
     #[test]
-    fn partnersbuilder_build_ok() {
+    fn partnersbuilder_build_non_cached_ok() {
         let mut config = config::Config::default();
         let _ = config.set("data.partners.connector", "ethereum");
+        let config = Config::from(config);
+
+        let res = PartnersBuilder::build(&config);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn partnersbuilder_build_cached_ok() {
+        let mut config = config::Config::default();
+        let _ = config.set("data.partners.connector", "ethereum");
+        let _ = config.set("data.partners.cache", "aerospike");
         let config = Config::from(config);
 
         let res = PartnersBuilder::build(&config);
@@ -171,7 +182,7 @@ mod tests {
         async fn get_partner(
             &self,
             _: web3::types::Address,
-        ) -> Result<(std::vec::Vec<u8>, bool), Error> {
+        ) -> Result<(std::vec::Vec<u8>, bool), crate::ucdp::contract::Error> {
             Ok((
                 vec![
                     112, 97, 114, 116, 110, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -201,6 +212,91 @@ mod tests {
                 name: "partner".into(),
                 enabled: true
             }
-        )
+        );
+    }
+
+    struct CacheHitDao {}
+
+    impl CacheDao for CacheHitDao {
+        fn get(&self, _: &str) -> std::result::Result<CacheEntry, crate::ucdp::cache::Error> {
+            Ok(CacheEntry {
+                value: Some("{\"name\":\"cached\",\"enabled\":true}".into()),
+                ttl: None,
+            })
+        }
+        fn put(&self, _: &str, _: std::vec::Vec<u8>) {}
+    }
+
+    #[actix_rt::test]
+    async fn partners_dao_cache_hit() {
+        let queries = Box::new(ConstQueries {});
+        let underlying_dao = EthereumContractPartnersDAO { queries };
+        let cache_dao = Box::new(CacheHitDao {});
+        let cache_partners_dao = CachePartnerDAO {
+            underlying_dao,
+            cache_dao,
+        };
+        let partners = Partners {
+            dao: Box::new(cache_partners_dao),
+        };
+
+        let partner = partners.get_partner("0xaddress").await.unwrap();
+        assert_eq!(
+            partner,
+            Partner {
+                name: "cached".into(),
+                enabled: true
+            }
+        );
+    }
+
+    struct CacheMissDao {
+        pub callback: Box<dyn Fn(Vec<u8>) + Send + Sync>,
+    }
+
+    impl CacheDao for CacheMissDao {
+        fn get(&self, _: &str) -> std::result::Result<CacheEntry, crate::ucdp::cache::Error> {
+            Ok(CacheEntry {
+                value: None,
+                ttl: None,
+            })
+        }
+        fn put(&self, _: &str, value: std::vec::Vec<u8>) {
+            (self.callback)(value);
+        }
+    }
+
+    #[actix_rt::test]
+    async fn partners_dao_cache_miss() {
+        let put_in_cache = |bytes| {
+            assert_eq!(
+                bytes,
+                "{\"name\":\"partner\",\"enabled\":true}"
+                    .as_bytes()
+                    .to_vec()
+            );
+        };
+        let queries = Box::new(ConstQueries {});
+        let underlying_dao = EthereumContractPartnersDAO { queries };
+        let cache_dao = Box::new(CacheMissDao {
+            callback: Box::new(put_in_cache),
+        });
+        let cache_partners_dao = CachePartnerDAO {
+            underlying_dao,
+
+            cache_dao,
+        };
+        let partners = Partners {
+            dao: Box::new(cache_partners_dao),
+        };
+
+        let partner = partners.get_partner("0xaddress").await.unwrap();
+        assert_eq!(
+            partner,
+            Partner {
+                name: "partner".into(),
+                enabled: true
+            }
+        );
     }
 }
