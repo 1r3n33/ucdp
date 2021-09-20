@@ -98,11 +98,10 @@ mod tests {
 
     #[async_trait]
     impl PartnersDAO for PartnerOptionDAO {
-        async fn get_partner(&self, _: &str) -> Result<Partner, Error> {
-            match self.partner.clone() {
-                Some(partner) => Ok(partner),
-                None => Err(Error {}),
-            }
+        async fn get_partner(&self, p: &str) -> Result<Partner, Error> {
+            self.partner
+                .clone()
+                .ok_or_else(|| Error::PartnerNotFound(p.to_string()))
         }
     }
 

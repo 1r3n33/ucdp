@@ -1,6 +1,24 @@
 use crate::ucdp::config::Config;
+use std::fmt::Debug;
+use thiserror::Error;
 
-pub struct Error {}
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("aerospike error")]
+    Aerospike(#[from] aerospike::Error),
+
+    #[error("config error")]
+    Config(#[from] crate::ucdp::config::Error),
+
+    #[error("unknown connector: {0}")]
+    UnknownConnector(String),
+
+    #[error("invalid type: {0}")]
+    InvalidType(String),
+
+    #[error("item not found")]
+    ItemNotFound,
+}
 
 pub struct CacheEntry {
     pub value: Option<Vec<u8>>,
@@ -28,13 +46,13 @@ impl CacheDao for AerospikeCacheDao {
         {
             // Item has been fetched
             Ok(record) => {
-                let data = record.bins.get("0");
+                let data = record.bins.get("0").ok_or(Error::ItemNotFound)?;
                 match data {
-                    Some(aerospike::Value::Blob(bytes)) => Ok(CacheEntry {
+                    aerospike::Value::Blob(bytes) => Ok(CacheEntry {
                         value: Some(bytes.to_vec()),
                         ttl: record.time_to_live(),
                     }),
-                    _ => Err(Error {}),
+                    v => Err(Error::InvalidType(v.to_string())),
                 }
             }
             // Item does not exist
@@ -46,7 +64,7 @@ impl CacheDao for AerospikeCacheDao {
                 ttl: None,
             }),
             // Other errors
-            _ => Err(Error {}),
+            Err(e) => Err(Error::Aerospike(e)),
         }
     }
 
@@ -63,8 +81,12 @@ pub struct CacheBuilder {}
 impl CacheBuilder {
     pub fn build(config: &Config, prefix: &str) -> Result<Box<dyn CacheDao>, Error> {
         let cache_type_key = String::new() + prefix + ".cache";
-        match config.get_str(cache_type_key.as_str()) {
-            Ok(cache) if cache == "aerospike" => {
+        match config
+            .get_str(cache_type_key.as_str())
+            .map_err(Error::Config)?
+            .as_str()
+        {
+            "aerospike" => {
                 let set_name_key = String::new() + prefix + ".aerospike.set";
                 let set_name = config
                     .get_str(set_name_key.as_str())
@@ -75,19 +97,17 @@ impl CacheBuilder {
 
                 let mut client_policy = aerospike::ClientPolicy::default().clone();
                 client_policy.fail_if_not_connected = false; // it makes testing easier
+                let client =
+                    aerospike::Client::new(&client_policy, &host).map_err(Error::Aerospike)?;
 
-                let aerospike_client = aerospike::Client::new(&client_policy, &host);
-                match aerospike_client {
-                    Ok(client) => Ok(Box::new(AerospikeCacheDao {
-                        client,
-                        set_name,
-                        read_policy: aerospike::ReadPolicy::default(),
-                        write_policy: aerospike::WritePolicy::default(),
-                    })),
-                    _ => Err(Error {}),
-                }
+                Ok(Box::new(AerospikeCacheDao {
+                    client,
+                    set_name,
+                    read_policy: aerospike::ReadPolicy::default(),
+                    write_policy: aerospike::WritePolicy::default(),
+                }))
             }
-            _ => Err(Error {}),
+            c => Err(Error::UnknownConnector(c.to_string())),
         }
     }
 }

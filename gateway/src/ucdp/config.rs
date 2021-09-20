@@ -1,12 +1,17 @@
 use crate::ucdp::stream::{KafkaStreamProducer, StreamProducer};
-use config::Environment;
+use config::{ConfigError, Environment};
+use thiserror::Error;
 
 #[derive(Clone)]
 pub struct Config {
     config: config::Config,
 }
 
-pub struct Error {}
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("config error")]
+    Config(#[from] ConfigError),
+}
 
 impl Config {
     pub fn new(path: String) -> Self {
@@ -43,7 +48,7 @@ impl Config {
     }
 
     pub fn get_str(&self, key: &str) -> Result<String, Error> {
-        self.config.get_str(key).map_err(|_| Error {})
+        self.config.get_str(key).map_err(Error::Config)
     }
 }
 
@@ -95,25 +100,13 @@ mod tests {
         )
     }
 
-    impl PartialEq for Error {
-        fn eq(&self, _: &Self) -> bool {
-            true
-        }
-    }
-
-    impl fmt::Debug for Error {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "Error")
-        }
-    }
-
     #[test]
     fn config_get_str() {
         let mut config = config::Config::default();
         let _ = config.set("abc", "123");
 
         let config = Config { config };
-        assert_eq!(config.get_str("abc"), Ok("123".into()));
-        assert_eq!(config.get_str("def"), Err(Error {}));
+        assert_eq!(config.get_str("abc").unwrap().as_str(), "123");
+        assert!(config.get_str("def").is_err());
     }
 }

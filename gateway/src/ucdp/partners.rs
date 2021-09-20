@@ -1,9 +1,11 @@
 use crate::ucdp::cache::{CacheBuilder, CacheDao};
 use crate::ucdp::config::Config;
 use crate::ucdp::contract::{EthereumContractQueries, EthereumContractQueriesBuilder};
+use crate::ucdp::{cache, contract};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use thiserror::Error;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Partner {
@@ -11,8 +13,26 @@ pub struct Partner {
     pub enabled: bool,
 }
 
-#[derive(Debug)]
-pub struct Error {}
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("cache error")]
+    Cache(#[from] cache::Error),
+
+    #[error("config error")]
+    Config(#[from] crate::ucdp::config::Error),
+
+    #[error("contract error")]
+    Contract(#[from] contract::Error),
+
+    #[error("deserialization error")]
+    Deserialization(#[from] serde_json::Error),
+
+    #[error("partner not found: {0}")]
+    PartnerNotFound(String),
+
+    #[error("unknown connector: {0}")]
+    UnknownConnector(String),
+}
 
 #[async_trait]
 pub trait PartnersDAO: Send + Sync {
@@ -36,7 +56,7 @@ impl PartnersDAO for EthereumContractPartnersDAO {
                     .into(),
                 enabled,
             })
-            .map_err(|_| Error {})
+            .map_err(Error::Contract)
     }
 }
 
@@ -51,24 +71,19 @@ where
     T: PartnersDAO,
 {
     async fn get_partner(&self, address: &str) -> Result<Partner, Error> {
-        match self.cache_dao.get(address) {
-            Ok(entry) => match entry.value {
-                // Partner in cache
-                Some(bytes) => {
-                    let partner: Partner = serde_json::from_slice(&bytes).unwrap();
+        if let Some(bytes) = self.cache_dao.get(address).map_err(Error::Cache)?.value {
+            // Partner in cache
+            serde_json::from_slice(&bytes).map_err(Error::Deserialization)
+        } else {
+            // Partner not in cache: refresh data from underlying dao then put in cache
+            self.underlying_dao
+                .get_partner(address)
+                .await
+                .and_then(|partner| {
+                    let v = serde_json::to_vec(&partner).map_err(Error::Deserialization)?;
+                    self.cache_dao.put(address, v);
                     Ok(partner)
-                }
-                // Partner not in cache: refresh data from underlying dao then put in cache
-                None => match self.underlying_dao.get_partner(address).await {
-                    Ok(partner) => {
-                        self.cache_dao
-                            .put(address, serde_json::to_vec(&partner).unwrap());
-                        Ok(partner)
-                    }
-                    Err(_) => Err(Error {}),
-                },
-            },
-            _ => Err(Error {}),
+                })
         }
     }
 }
@@ -87,31 +102,30 @@ pub struct PartnersBuilder {}
 
 impl PartnersBuilder {
     pub fn build(config: &Config) -> Result<Partners, Error> {
-        match config.get_str("data.partners.connector") {
-            Ok(connector) if connector == "ethereum" => {
+        match config
+            .get_str("data.partners.connector")
+            .map_err(Error::Config)?
+            .as_str()
+        {
+            "ethereum" => {
                 let ethereum_dao = EthereumContractPartnersDAO {
                     queries: EthereumContractQueriesBuilder::build(config),
                 };
 
-                match config.get_str("data.partners.cache") {
-                    Ok(_) => match CacheBuilder::build(config, "data.partners") {
-                        Ok(cache_dao) => {
-                            let aerospike_cache_dao = CachePartnerDAO {
-                                underlying_dao: ethereum_dao,
-                                cache_dao,
-                            };
-                            Ok(Partners {
-                                dao: Box::new(aerospike_cache_dao),
-                            })
-                        }
-                        _ => Err(Error {}),
+                Ok(Partners {
+                    dao: if config.get_str("data.partners.cache").is_ok() {
+                        let cache_dao =
+                            CacheBuilder::build(config, "data.partners").map_err(Error::Cache)?;
+                        Box::new(CachePartnerDAO {
+                            underlying_dao: ethereum_dao,
+                            cache_dao,
+                        })
+                    } else {
+                        Box::new(ethereum_dao)
                     },
-                    _ => Ok(Partners {
-                        dao: Box::new(ethereum_dao),
-                    }),
-                }
+                })
             }
-            _ => Err(Error {}),
+            c => Err(Error::UnknownConnector(c.to_string())),
         }
     }
 }

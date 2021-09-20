@@ -1,9 +1,14 @@
 use crate::ucdp::config::Config;
 use async_trait::async_trait;
 use std::str::FromStr;
+use thiserror::Error;
 use web3::contract::Options;
 
-pub struct Error {}
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("contract error")]
+    Contract(#[from] web3::contract::Error),
+}
 
 #[async_trait]
 pub trait EthereumContractQueries: Send + Sync {
@@ -20,7 +25,7 @@ impl EthereumContractQueries for EthereumContractQueriesImpl {
         self.contract
             .query("partners", (address,), None, Options::default(), None)
             .await
-            .map_err(|_| Error {})
+            .map_err(Error::Contract)
     }
 }
 
@@ -50,20 +55,7 @@ impl EthereumContractQueriesBuilder {
 #[cfg(test)]
 mod tests {
     use crate::ucdp::contract::{Config, Error, EthereumContractQueriesBuilder};
-    use std::fmt;
     use std::str::FromStr;
-
-    impl PartialEq for Error {
-        fn eq(&self, _: &Self) -> bool {
-            true
-        }
-    }
-
-    impl fmt::Debug for Error {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "Error")
-        }
-    }
 
     #[actix_rt::test]
     async fn contract_get_partner_default() {
@@ -77,9 +69,8 @@ mod tests {
                 web3::types::Address::from_str("0x8888888888888888888888888888888888888888")
                     .unwrap_or_default(),
             )
-            .await
-            .unwrap_err();
-        assert_eq!(res, Error {});
+            .await;
+        assert!(matches!(res, Err(Error::Contract(_))));
     }
 
     #[ignore]
