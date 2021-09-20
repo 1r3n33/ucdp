@@ -23,9 +23,27 @@
         "internalType": "bool",
         "name": "enabled",
         "type": "bool"
+      },
+      {
+        "internalType": "bool",
+        "name": "registered",
+        "type": "bool"
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "name",
+        "type": "bytes32"
+      }
+    ],
+    "name": "registerPartner",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ]

@@ -17,4 +17,6 @@ $ sudo docker run --rm -t -i -p 8545:8545 ucdp/smart-contracts
 ```console
 $ truffle console --network docker
 truffle(docker)> ucdp = await Ucdp.at("0x81F34DC2C089AF4e11881af04399a7e722feA6F4")
+truffle(docker)> await ucdp.registerPartner(web3.utils.fromAscii("partner"), { from: accounts[0] })
+truffle(docker)> await ucdp.partners(accounts[0])
 ```

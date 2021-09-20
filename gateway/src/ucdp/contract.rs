@@ -10,6 +10,7 @@ pub enum Error {
     Contract(#[from] web3::contract::Error),
 }
 
+// TODO: Return the true contract struct (Vec<u8>, bool, bool)
 #[async_trait]
 pub trait EthereumContractQueries: Send + Sync {
     async fn get_partner(&self, address: web3::types::Address) -> Result<(Vec<u8>, bool), Error>;
@@ -25,6 +26,7 @@ impl EthereumContractQueries for EthereumContractQueriesImpl {
         self.contract
             .query("partners", (address,), None, Options::default(), None)
             .await
+            .map(|(name, enabled, _): (Vec<u8>, bool, bool)| (name, enabled))
             .map_err(Error::Contract)
     }
 }
