@@ -1,0 +1,12 @@
+[package]
+name = "workers"
+version = "0.1.0"
+authors = ["Irenee <icaroulle@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+actix-web = "4.0.0-beta.8"
+async-trait = "0.1.50"
+env_logger = "0.9.0"
+log = "0.4.0"
+rdkafka = { version = "0.25", features = ["cmake-build"] }
