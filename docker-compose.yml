@@ -45,9 +45,17 @@ services:
     ports:
       - 8080:8080
     environment:
-      RUST_LOG: ucdp=trace
+      RUST_LOG: ucdp=info
       UCDP_SERVER_BIND: 0.0.0.0:8080
       UCDP_STREAM_KAFKA_BROKER: kafka:9092
       UCDP_DATA_PARTNERS_ETHEREUM_NETWORK: http://smart-contracts:8545
       UCDP_DATA_PARTNERS_ETHEREUM_CONTRACT: "0x81F34DC2C089AF4e11881af04399a7e722feA6F4"
       UCDP_CACHE_AEROSPIKE_HOST: aerospike:3000
+
+  workers:
+    depends_on:
+      - kafka
+    image: ucdp/workers:latest
+    environment:
+      RUST_LOG: info
+      UCDP_STREAM_KAFKA_BROKER: kafka:9092

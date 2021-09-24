@@ -1,5 +1,5 @@
 [package]
-name = "ucdp-server"
+name = "gateway"
 version = "0.1.0"
 authors = ["Irenee <icaroulle@gmail.com>"]
 edition = "2018"

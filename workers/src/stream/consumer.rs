@@ -51,7 +51,7 @@ impl StreamConsumerBuilder {
         let kafka_consumer: rdkafka::consumer::StreamConsumer =
             rdkafka::config::ClientConfig::new()
                 .set("group.id", "workers")
-                .set("bootstrap.servers", "127.0.0.1:9092")
+                .set("bootstrap.servers", "kafka:9092")
                 .create()
                 .map_err(|_| Error {})?;
 
