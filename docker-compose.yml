@@ -32,7 +32,9 @@ services:
       DEFAULT_TTL: 20
 
   smart-contracts:
-    image: ucdp/smart-contracts:latest
+    build:
+      dockerfile: Dockerfile
+      context: smart-contracts
     ports:
       - 8545:8545
 
@@ -41,7 +43,9 @@ services:
       - kafka
       - aerospike
       - smart-contracts
-    image: ucdp/gateway:latest
+    build:
+      dockerfile: Dockerfile
+      context: gateway
     ports:
       - 8080:8080
     environment:
@@ -55,7 +59,9 @@ services:
   workers:
     depends_on:
       - kafka
-    image: ucdp/workers:latest
+    build:
+      dockerfile: Dockerfile
+      context: workers
     environment:
       RUST_LOG: info
       UCDP_STREAM_KAFKA_BROKER: kafka:9092
