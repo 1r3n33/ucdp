@@ -59,6 +59,9 @@ pub async fn run_http_server(
     sender: crossbeam_channel::Sender<crate::ucdp::stream::Events>,
 ) -> std::io::Result<()> {
     let config = Config::new(String::from("config/Main"));
+    let server_binding_address = config
+        .get_str("server.bind")
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::Other))?;
 
     let state = web::Data::new(AppState {
         sender,
@@ -77,7 +80,7 @@ pub async fn run_http_server(
             .wrap(Logger::default())
             .service(proxy)
     })
-    .bind(config.get_server_binding_address())?
+    .bind(server_binding_address)?
     .run()
     .await
 }

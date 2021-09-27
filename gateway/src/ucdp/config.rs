@@ -26,10 +26,6 @@ impl Config {
         Config { config }
     }
 
-    pub fn get_server_binding_address(&self) -> String {
-        self.config.get_str("server.bind").unwrap()
-    }
-
     fn get_kafka_stream_producer(&self) -> KafkaStreamProducer {
         KafkaStreamProducer {
             topic: self.config.get_str("stream.kafka.topic").unwrap(),
@@ -78,15 +74,9 @@ mod tests {
 
     fn config() -> Config {
         let mut config = config::Config::default();
-        config.set("server.bind", "0.0.0.0:0000").unwrap();
         config.set("stream.kafka.broker", "1.1.1.1:1111").unwrap();
         config.set("stream.kafka.topic", "kafka_topic").unwrap();
         Config { config }
-    }
-
-    #[test]
-    fn config_get_server_binding_address() {
-        assert_eq!(config().get_server_binding_address(), "0.0.0.0:0000");
     }
 
     #[test]
