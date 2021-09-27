@@ -44,7 +44,7 @@ impl StreamProducer for KafkaStreamProducer {
 
 pub fn spawn_stream_producer_thread(receiver: crossbeam_channel::Receiver<Events>) {
     let config = Config::new(String::from("config/Main"));
-    let stream_producer = config.get_stream_producer();
+    let stream_producer = StreamProducerBuilder::build(&config).unwrap();
     thread::spawn(|| block_on(stream_producer_loop(stream_producer, receiver)));
 }
 
@@ -64,9 +64,34 @@ async fn stream_producer_loop(
     }
 }
 
+#[derive(Debug)]
+pub struct Error {}
+
+pub struct StreamProducerBuilder {}
+
+impl StreamProducerBuilder {
+    pub fn build(config: &Config) -> Result<Box<dyn StreamProducer>, Error> {
+        let stream_producer = KafkaStreamProducer {
+            topic: config.get_str("stream.kafka.topic").map_err(|_| Error {})?,
+            producer: rdkafka::config::ClientConfig::new()
+                .set(
+                    "bootstrap.servers",
+                    config
+                        .get_str("stream.kafka.broker")
+                        .map_err(|_| Error {})?,
+                )
+                .create()
+                .map_err(|_| Error {})?,
+        };
+
+        Ok(Box::new(stream_producer))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{async_trait, block_on, stream_producer_loop, Events, StreamProducer};
+    use super::{async_trait, block_on, stream_producer_loop};
+    use crate::ucdp::stream::{Config, Events, StreamProducer, StreamProducerBuilder};
     use crossbeam_channel::{unbounded, RecvError};
     use std::fmt;
 
@@ -112,5 +137,25 @@ mod tests {
         ));
 
         assert_eq!(receiver.recv(), Err(RecvError))
+    }
+
+    #[test]
+    fn stream_producer_builder_ok() {
+        let mut config = config::Config::default();
+        let _ = config.set("stream.kafka.topic", "topic");
+        let _ = config.set("stream.kafka.broker", "0.0.0.0:0000");
+        let config = Config::from(config);
+
+        let res = StreamProducerBuilder::build(&config);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn stream_producer_builder_err() {
+        let config = config::Config::default();
+        let config = Config::from(config);
+
+        let res = StreamProducerBuilder::build(&config);
+        assert!(res.is_err());
     }
 }
