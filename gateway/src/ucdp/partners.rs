@@ -1,11 +1,11 @@
 use crate::ucdp::cache::{CacheBuilder, CacheDao};
-use crate::ucdp::config::Config;
 use crate::ucdp::contract::{EthereumContractQueries, EthereumContractQueriesBuilder};
 use crate::ucdp::{cache, contract};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
+use ucdp::config::Config;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Partner {
@@ -19,7 +19,7 @@ pub enum Error {
     Cache(#[from] cache::Error),
 
     #[error("config error")]
-    Config(#[from] crate::ucdp::config::Error),
+    Config(#[from] ucdp::config::Error),
 
     #[error("contract error")]
     Contract(#[from] contract::Error),

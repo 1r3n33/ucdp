@@ -1,7 +1,7 @@
-use crate::ucdp::config::Config;
 use async_trait::async_trait;
 use std::str::FromStr;
 use thiserror::Error;
+use ucdp::config::Config;
 use web3::contract::Options;
 
 #[derive(Error, Debug)]
@@ -56,8 +56,9 @@ impl EthereumContractQueriesBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::ucdp::contract::{Config, Error, EthereumContractQueriesBuilder};
+    use crate::ucdp::contract::{Error, EthereumContractQueriesBuilder};
     use std::str::FromStr;
+    use ucdp::config::Config;
 
     #[actix_rt::test]
     async fn contract_get_partner_default() {
