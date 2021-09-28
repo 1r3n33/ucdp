@@ -1,6 +1,6 @@
-use crate::ucdp::config::Config;
 use std::fmt::Debug;
 use thiserror::Error;
+use ucdp::config::Config;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -8,7 +8,7 @@ pub enum Error {
     Aerospike(#[from] aerospike::Error),
 
     #[error("config error")]
-    Config(#[from] crate::ucdp::config::Error),
+    Config(#[from] ucdp::config::Error),
 
     #[error("unknown connector: {0}")]
     UnknownConnector(String),
@@ -115,7 +115,7 @@ impl CacheBuilder {
 #[cfg(test)]
 mod tests {
     use crate::ucdp::cache::CacheBuilder;
-    use crate::ucdp::config::Config;
+    use ucdp::config::Config;
 
     #[test]
     fn cachebuilder_build_aerospike_ok() {

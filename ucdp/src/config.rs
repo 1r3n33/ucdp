@@ -30,9 +30,8 @@ impl Config {
     }
 }
 
-#[cfg(test)]
-impl Config {
-    pub(in crate) fn from(config: config::Config) -> Self {
+impl From<config::Config> for Config {
+    fn from(config: config::Config) -> Self {
         Config { config }
     }
 }

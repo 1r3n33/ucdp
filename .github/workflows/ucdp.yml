@@ -33,15 +33,15 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: gateway
+        working-directory: .
     steps:
       - uses: actions/checkout@v2
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --bin gateway
       - name: Test
-        run: cargo test --verbose
+        run: cargo test --bin gateway
       - name: Docker
-        run: docker build . -t ucdp/gateway --no-cache --pull
+        run: sudo docker build . -f gateway.Dockerfile --no-cache --pull
 
   workers:
     needs: smart-contracts

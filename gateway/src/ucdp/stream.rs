@@ -1,5 +1,4 @@
 use crate::ucdp::api::Event;
-use crate::ucdp::config::Config;
 use async_trait::async_trait;
 use crossbeam_channel::select;
 use futures::executor::block_on;
@@ -7,6 +6,7 @@ use rdkafka::producer::FutureRecord;
 use serde::Serialize;
 use std::thread;
 use std::time::Duration;
+use ucdp::config::Config;
 
 #[derive(Serialize)]
 pub struct Events {
@@ -91,9 +91,10 @@ impl StreamProducerBuilder {
 #[cfg(test)]
 mod tests {
     use super::{async_trait, block_on, stream_producer_loop};
-    use crate::ucdp::stream::{Config, Events, StreamProducer, StreamProducerBuilder};
+    use crate::ucdp::stream::{Events, StreamProducer, StreamProducerBuilder};
     use crossbeam_channel::{unbounded, RecvError};
     use std::fmt;
+    use ucdp::config::Config;
 
     impl fmt::Debug for Events {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

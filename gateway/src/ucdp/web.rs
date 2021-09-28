@@ -1,8 +1,8 @@
 use crate::ucdp::api::{ErrorResponse, OkResponse};
-use crate::ucdp::config::Config;
 use crate::ucdp::partners::{Partners, PartnersBuilder};
 use actix_cors::Cors;
 use actix_web::{http::header, middleware::Logger, post, web, App, HttpResponse, HttpServer};
+use ucdp::config::Config;
 use uuid::Uuid;
 
 struct AppState {

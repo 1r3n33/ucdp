@@ -6,6 +6,12 @@
 
 ![SVG](./ucdp.svg)
 
+## Build with docker-compose
+
+```console
+$ sudo docker-compose build --no-cache --pull
+```
+
 ## Run with docker-compose
 
 ```console
