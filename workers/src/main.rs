@@ -1,14 +1,13 @@
-use crate::stream::consumer::StreamConsumerBuilder;
-
-mod stream;
-
-#[derive(Debug)]
-struct Error {}
+use ucdp::config::Config;
+use ucdp::stream::consumer::{Error, StreamConsumerBuilder};
 
 #[actix_web::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
-    let stream_consumer = StreamConsumerBuilder::build().map_err(|_| Error {})?;
+
+    let config = Config::new(String::from("config/Main"));
+
+    let stream_consumer = StreamConsumerBuilder::build(&config)?;
     loop {
         stream_consumer.consume().await;
     }
