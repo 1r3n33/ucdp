@@ -28,7 +28,6 @@ RUN cargo test --manifest-path=/app/gateway/Cargo.toml
 
 # Copy resources for execution
 COPY gateway/scripts /app/gateway/scripts
-
 COPY gateway/config /app/gateway/config
 
 WORKDIR /app/gateway

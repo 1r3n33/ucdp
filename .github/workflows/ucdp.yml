@@ -28,7 +28,7 @@ jobs:
       - name: Docker
         run: docker build . -t ucdp/smart-contracts --no-cache --pull
 
-  gateway:
+  ucdp:
     needs: smart-contracts
     runs-on: ubuntu-latest
     defaults:
@@ -37,23 +37,36 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build
-        run: cargo build --bin gateway
+        run: cargo build -p ucdp
       - name: Test
-        run: cargo test --bin gateway
-      - name: Docker
-        run: sudo docker build . -f gateway.Dockerfile --no-cache --pull
+        run: cargo test -p ucdp
 
-  workers:
-    needs: smart-contracts
+  gateway:
+    needs: ucdp
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: workers
+        working-directory: .
     steps:
       - uses: actions/checkout@v2
       - name: Build
-        run: cargo build --verbose
+        run: cargo build -p gateway
       - name: Test
-        run: cargo test --verbose
+        run: cargo test -p gateway
       - name: Docker
-        run: docker build . -t ucdp/workers --no-cache --pull
+        run: docker build . -f gateway.Dockerfile --no-cache --pull
+
+  workers:
+    needs: ucdp
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: cargo build -p workers
+      - name: Test
+        run: cargo test -p workers
+      - name: Docker
+        run: docker build . -f workers.Dockerfile --no-cache --pull

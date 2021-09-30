@@ -5,7 +5,7 @@ set -e
 
 # Wait for dependencies to be up, if we know where they are.
 if [ -n "$UCDP_STREAM_KAFKA_BROKER" ]; then
-  /ucdp/workers/scripts/wait-for-it.sh -t 30 "$UCDP_STREAM_KAFKA_BROKER"
+  /app/workers/scripts/wait-for-it.sh -t 30 "$UCDP_STREAM_KAFKA_BROKER"
 fi
 
 # Run the main container command.

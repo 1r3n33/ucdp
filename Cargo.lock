@@ -63,7 +63,7 @@ dependencies = [
  "futures-util",
  "log",
  "once_cell",
- "smallvec 1.6.1",
+ "smallvec 1.7.0",
 ]
 
 [[package]]
@@ -149,7 +149,7 @@ dependencies = [
  "regex",
  "serde 1.0.130",
  "sha-1",
- "smallvec 1.6.1",
+ "smallvec 1.7.0",
  "time 0.2.27",
  "tokio 1.12.0",
  "zstd",
@@ -200,7 +200,7 @@ dependencies = [
  "copyless",
  "futures-channel",
  "futures-util",
- "smallvec 1.6.1",
+ "smallvec 1.7.0",
  "tokio 0.2.25",
 ]
 
@@ -350,7 +350,7 @@ dependencies = [
  "serde 1.0.130",
  "serde_json",
  "serde_urlencoded",
- "smallvec 1.6.1",
+ "smallvec 1.7.0",
  "socket2 0.4.2",
  "time 0.2.27",
  "url",
@@ -1965,9 +1965,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e11263a97373b43da4b426edbb52ef99a7b51e2d9752ef56a7f8b356f48495a5"
+checksum = "373b1a4c1338d9cd3d1fa53b3a11bdab5ab6bd80a20f7f7becd76953ae2be909"
 dependencies = [
  "arrayvec 0.7.1",
  "bitvec",
@@ -1979,9 +1979,9 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec-derive"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b157dc92b3db2bae522afb31b3843e91ae097eb01d66c72dda66a2e86bc3ca14"
+checksum = "1557010476e0595c9b568d16dcfb81b93cdeb157612726f5170d31aa707bed27"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2036,7 +2036,7 @@ dependencies = [
  "instant",
  "libc",
  "redox_syscall 0.2.10",
- "smallvec 1.6.1",
+ "smallvec 1.7.0",
  "winapi 0.3.9",
 ]
 
@@ -2709,9 +2709,9 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "1.6.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
+checksum = "1ecab6c735a6bb4139c0caafd0cc3635748bbb3acf4550e8138122099251f309"
 
 [[package]]
 name = "socket2"
@@ -3121,7 +3121,7 @@ dependencies = [
  "lazy_static",
  "log",
  "rand 0.7.3",
- "smallvec 1.6.1",
+ "smallvec 1.7.0",
  "thiserror",
  "tokio 0.2.25",
  "url",
@@ -3140,7 +3140,7 @@ dependencies = [
  "log",
  "lru-cache",
  "resolv-conf",
- "smallvec 1.6.1",
+ "smallvec 1.7.0",
  "thiserror",
  "tokio 0.2.25",
  "trust-dns-proto",
@@ -3168,7 +3168,10 @@ checksum = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"
 name = "ucdp"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "config",
+ "log",
+ "rdkafka",
  "thiserror",
 ]
 
@@ -3473,6 +3476,7 @@ dependencies = [
  "env_logger",
  "log",
  "rdkafka",
+ "ucdp",
 ]
 
 [[package]]
