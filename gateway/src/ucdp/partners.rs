@@ -27,11 +27,12 @@ pub enum Error {
     #[error("deserialization error")]
     Deserialization(#[from] serde_json::Error),
 
-    #[error("partner not found: {0}")]
-    PartnerNotFound(String),
-
     #[error("unknown connector: {0}")]
     UnknownConnector(String),
+
+    #[cfg(test)]
+    #[error("partner not found: {0}")]
+    PartnerNotFound(String),
 }
 
 #[async_trait]
