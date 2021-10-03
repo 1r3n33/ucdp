@@ -27,10 +27,13 @@ $ curl \
   -H 'Content-Type: application/json' \
   -d '{
         "partner": "0x0000000000000000000000000000000000000123",
+        "user": {
+          "id": "0x0000000000000000000000000000000000000456"
+        },
         "events": [
-            {
-                "name": "test"
-            }
+          {
+            "name": "test"
+          }
         ]
     }' \
   -v | jq .

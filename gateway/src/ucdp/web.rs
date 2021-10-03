@@ -87,6 +87,7 @@ pub async fn run_http_server(
 
 #[cfg(test)]
 mod tests {
+    use crate::ucdp::api::User;
     use crate::ucdp::partners::{Error, Partner, PartnersBuilderForTest, PartnersDAO};
     use crate::ucdp::web::{proxy, AppState};
     use actix_http::http::Method;
@@ -119,7 +120,10 @@ mod tests {
             .uri("/v1/events")
             .method(Method::POST)
             .set_json(&crate::ucdp::api::Events {
-                partner: "0x0123456789".into(),
+                partner: "0x123456789".into(),
+                user: User {
+                    id: "0x9876543210".into(),
+                },
                 events: vec![crate::ucdp::api::Event {
                     name: String::from("event1"),
                 }],
