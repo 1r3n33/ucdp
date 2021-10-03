@@ -61,11 +61,14 @@ components:
     Events:
       required:
         - partner
+        - user
         - events
       type: object
       properties:
         partner:
           type: string
+        user:
+          $ref: "#/components/schemas/User"
         events:
           type: array
           items:
@@ -83,4 +86,10 @@ components:
       type: object
       properties:
         error:
+          type: string
+    User:
+      required:
+        - id
+      properties:
+        id:
           type: string
