@@ -1,4 +1,5 @@
 use crate::ucdp::api::{ErrorResponse, OkResponse};
+use crate::ucdp::dal::{AuthorizedPartnersByUser, AuthorizedPartnersByUserBuilder};
 use crate::ucdp::partners::{Partners, PartnersBuilder};
 use actix_cors::Cors;
 use actix_web::{http::header, middleware::Logger, post, web, App, HttpResponse, HttpServer};
@@ -8,6 +9,7 @@ use uuid::Uuid;
 struct AppState {
     sender: crossbeam_channel::Sender<crate::ucdp::stream::Events>,
     partners: Partners,
+    authorized_partners_by_user: AuthorizedPartnersByUser,
 }
 
 // TODO move to api
@@ -26,17 +28,41 @@ async fn proxy(
             error: String::from("Events array must not be larger than 100 events."),
         });
     }
-
-    match state.partners.get_partner(req.partner.as_str()).await {
+    // Check partner id
+    let partner_id = req.partner.as_str();
+    match state.partners.get_partner(partner_id).await {
         Ok(partner) if !partner.enabled => {
             return HttpResponse::Forbidden().json(&ErrorResponse {
                 error: String::from("Partner must be enabled."),
             });
         }
         Err(_) => {
-            return HttpResponse::Forbidden().json(&ErrorResponse {
-                error: String::from("Partner must be set."),
+            return HttpResponse::InternalServerError().json(&ErrorResponse {
+                error: String::from("Get Partner error."),
             });
+        }
+        _ => {}
+    }
+
+    // Check user id
+    let user_id = req.user.id.as_str();
+    // match state.users.get_user(user_id).await ...
+
+    // Check that user has authorized the partner ...
+    match state
+        .authorized_partners_by_user
+        .is_authorized(user_id, partner_id)
+        .await
+    {
+        Ok(false) => {
+            return HttpResponse::Forbidden().json(&ErrorResponse {
+                error: String::from("User has not autorized partner."),
+            })
+        }
+        Err(_) => {
+            return HttpResponse::InternalServerError().json(&ErrorResponse {
+                error: String::from("Is authorized Partner by User error."),
+            })
         }
         _ => {}
     }
@@ -66,6 +92,7 @@ pub async fn run_http_server(
     let state = web::Data::new(AppState {
         sender,
         partners: PartnersBuilder::build(&config).unwrap(),
+        authorized_partners_by_user: AuthorizedPartnersByUserBuilder::build(&config).unwrap(),
     });
     HttpServer::new(move || {
         App::new()
@@ -88,7 +115,8 @@ pub async fn run_http_server(
 #[cfg(test)]
 mod tests {
     use crate::ucdp::api::User;
-    use crate::ucdp::partners::{Error, Partner, PartnersBuilderForTest, PartnersDAO};
+    use crate::ucdp::dal::{AuthorizedPartnersByUserBuilderForTest, AuthorizedPartnersByUserDao};
+    use crate::ucdp::partners::{Partner, PartnersBuilderForTest, PartnersDAO};
     use crate::ucdp::web::{proxy, AppState};
     use actix_http::http::Method;
     use actix_web::test::{init_service, TestRequest};
@@ -102,18 +130,42 @@ mod tests {
 
     #[async_trait]
     impl PartnersDAO for PartnerOptionDAO {
-        async fn get_partner(&self, p: &str) -> Result<Partner, Error> {
+        async fn get_partner(&self, p: &str) -> Result<Partner, crate::ucdp::partners::Error> {
             self.partner
                 .clone()
-                .ok_or_else(|| Error::PartnerNotFound(p.to_string()))
+                .ok_or_else(|| crate::ucdp::partners::Error::PartnerNotFound(p.to_string()))
         }
     }
 
-    async fn get_response(partner: Option<Partner>) -> ServiceResponse {
+    struct AuthorizedPartnerByUser {
+        is_partner_authorized: bool,
+    }
+
+    #[async_trait]
+    impl AuthorizedPartnersByUserDao for AuthorizedPartnerByUser {
+        async fn is_authorized(
+            &self,
+            _: &str,
+            _: &str,
+        ) -> Result<bool, crate::ucdp::dal::AuthorizedPartnersByUserError> {
+            Ok(self.is_partner_authorized)
+        }
+    }
+
+    async fn get_response(
+        partner: Option<Partner>,
+        is_partner_authorized: bool,
+    ) -> ServiceResponse {
         let (sender, _) = unbounded::<crate::ucdp::stream::Events>();
         let state = web::Data::new(AppState {
             sender,
             partners: PartnersBuilderForTest::build(Box::new(PartnerOptionDAO { partner })),
+            authorized_partners_by_user: AuthorizedPartnersByUserBuilderForTest::build(Box::new(
+                AuthorizedPartnerByUser {
+                    is_partner_authorized,
+                },
+            ))
+            .unwrap(),
         });
         let service = init_service(App::new().app_data(state.clone()).service(proxy)).await;
         let request = TestRequest::default()
@@ -135,26 +187,45 @@ mod tests {
 
     #[actix_rt::test]
     async fn http_server_simple_request_ok() {
-        let response = get_response(Some(Partner {
-            name: "".into(),
-            enabled: true,
-        }))
+        let response = get_response(
+            Some(Partner {
+                name: "".into(),
+                enabled: true,
+            }),
+            true,
+        )
         .await;
         assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[actix_rt::test]
     async fn http_server_simple_request_err_no_partner() {
-        let response = get_response(None).await;
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let response = get_response(None, true).await;
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[actix_rt::test]
     async fn http_server_simple_request_err_partner_disabled() {
-        let response = get_response(Some(Partner {
-            name: "".into(),
-            enabled: false,
-        }))
+        let response = get_response(
+            Some(Partner {
+                name: "".into(),
+                enabled: false,
+            }),
+            true,
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[actix_rt::test]
+    async fn http_server_simple_request_err_partner_not_authorized_by_user() {
+        let response = get_response(
+            Some(Partner {
+                name: "".into(),
+                enabled: true,
+            }),
+            false,
+        )
         .await;
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
