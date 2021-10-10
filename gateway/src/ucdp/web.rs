@@ -36,9 +36,9 @@ async fn proxy(
                 error: String::from("Partner must be enabled."),
             });
         }
-        Err(_) => {
+        Err(error) => {
             return HttpResponse::InternalServerError().json(&ErrorResponse {
-                error: String::from("Get Partner error."),
+                error: error.to_string(),
             });
         }
         _ => {}
@@ -59,9 +59,9 @@ async fn proxy(
                 error: String::from("User has not autorized partner."),
             })
         }
-        Err(_) => {
+        Err(error) => {
             return HttpResponse::InternalServerError().json(&ErrorResponse {
-                error: String::from("Is authorized Partner by User error."),
+                error: error.to_string(),
             })
         }
         _ => {}

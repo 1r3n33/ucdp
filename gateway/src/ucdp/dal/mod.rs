@@ -1,4 +1,5 @@
 mod authorized_partners_by_user;
+mod ethereum_dao;
 
 pub use self::authorized_partners_by_user::AuthorizedPartnersByUser;
 pub use self::authorized_partners_by_user::AuthorizedPartnersByUserBuilder;
