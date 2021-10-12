@@ -132,11 +132,11 @@ impl PartnersBuilder {
 }
 
 #[cfg(test)]
-pub(in crate) struct PartnersBuilderForTest {}
+pub struct PartnersBuilderForTest {}
 
 #[cfg(test)]
 impl PartnersBuilderForTest {
-    pub(in crate) fn build(dao: Box<dyn PartnersDAO>) -> Partners {
+    pub fn build(dao: Box<dyn PartnersDAO>) -> Partners {
         Partners { dao }
     }
 }
@@ -144,11 +144,12 @@ impl PartnersBuilderForTest {
 #[cfg(test)]
 mod tests {
     use crate::ucdp::cache::CacheEntry;
-    use crate::ucdp::partners::{
-        CacheDao, CachePartnerDAO, Config, EthereumContractPartnersDAO, EthereumContractQueries,
-        Partner, Partners, PartnersBuilder,
+    use crate::ucdp::dal::partners::{
+        CacheDao, CachePartnerDAO, EthereumContractPartnersDAO, EthereumContractQueries,
     };
+    use crate::ucdp::dal::{Partner, Partners, PartnersBuilder};
     use async_trait::async_trait;
+    use ucdp::config::Config;
 
     #[test]
     fn partnersbuilder_build_non_cached_ok() {

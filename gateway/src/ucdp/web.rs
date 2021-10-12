@@ -1,6 +1,7 @@
 use crate::ucdp::api::{ErrorResponse, OkResponse};
-use crate::ucdp::dal::{AuthorizedPartnersByUser, AuthorizedPartnersByUserBuilder};
-use crate::ucdp::partners::{Partners, PartnersBuilder};
+use crate::ucdp::dal::{
+    AuthorizedPartnersByUser, AuthorizedPartnersByUserBuilder, Partners, PartnersBuilder,
+};
 use actix_cors::Cors;
 use actix_web::{http::header, middleware::Logger, post, web, App, HttpResponse, HttpServer};
 use ucdp::config::Config;
@@ -115,12 +116,16 @@ pub async fn run_http_server(
 #[cfg(test)]
 mod tests {
     use crate::ucdp::api::User;
-    use crate::ucdp::dal::{AuthorizedPartnersByUserBuilderForTest, AuthorizedPartnersByUserDao};
-    use crate::ucdp::partners::{Partner, PartnersBuilderForTest, PartnersDAO};
+    use crate::ucdp::dal::{
+        AuthorizedPartnersByUserBuilderForTest, AuthorizedPartnersByUserDao, Partner,
+        PartnersBuilderForTest, PartnersDAO, PartnersError,
+    };
     use crate::ucdp::web::{proxy, AppState};
     use actix_http::http::Method;
+    use actix_web::dev::{Service, ServiceResponse};
+    use actix_web::http::StatusCode;
     use actix_web::test::{init_service, TestRequest};
-    use actix_web::{dev::Service, dev::ServiceResponse, http::StatusCode, web, App};
+    use actix_web::{web, App};
     use async_trait::async_trait;
     use crossbeam_channel::unbounded;
 
@@ -130,10 +135,10 @@ mod tests {
 
     #[async_trait]
     impl PartnersDAO for PartnerOptionDAO {
-        async fn get_partner(&self, p: &str) -> Result<Partner, crate::ucdp::partners::Error> {
+        async fn get_partner(&self, p: &str) -> Result<Partner, PartnersError> {
             self.partner
                 .clone()
-                .ok_or_else(|| crate::ucdp::partners::Error::PartnerNotFound(p.to_string()))
+                .ok_or_else(|| PartnersError::PartnerNotFound(p.to_string()))
         }
     }
 
