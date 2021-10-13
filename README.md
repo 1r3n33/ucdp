@@ -1,6 +1,6 @@
 # ucdp
 
-> **Customer Data Platform with undisputable data integrity and user privacy**
+> **Open Customer Data Platform of undisputed data integrity and user privacy**
 
 [![Ucdp](https://github.com/1r3n33/ucdp/actions/workflows/ucdp.yml/badge.svg)](https://github.com/1r3n33/ucdp/actions/workflows/ucdp.yml)
 
