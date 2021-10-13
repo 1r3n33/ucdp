@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::str::FromStr;
 use thiserror::Error;
 use ucdp::config::Config;
-use web3::contract::tokens::{Tokenizable, Tokenize};
+use web3::contract::tokens::{Detokenize, Tokenize};
 
 #[derive(Error, Debug)]
 pub enum EthereumDaoError {
@@ -38,7 +38,7 @@ pub struct EthereumDao {
 impl<'a, K, R> EthereumContractQuery<'a, K, R> for EthereumDao
 where
     K: Tokenize + Send + 'a,
-    R: Tokenizable,
+    R: Detokenize,
 {
     async fn get(&self, key: K) -> Result<R, EthereumDaoError>
     where
@@ -65,7 +65,7 @@ pub struct EthereumDaoBuilder<K, R> {
 impl<'a, K, R> EthereumDaoBuilder<K, R>
 where
     K: Tokenize + Send + 'a,
-    R: Tokenizable,
+    R: Detokenize,
 {
     pub fn build(
         config: &Config,

@@ -1,6 +1,6 @@
+use crate::ucdp::cache;
 use crate::ucdp::cache::{CacheBuilder, CacheDao};
-use crate::ucdp::contract::{EthereumContractQueries, EthereumContractQueriesBuilder};
-use crate::ucdp::{cache, contract};
+use crate::ucdp::dal::ethereum_dao::{EthereumContractQuery, EthereumDaoBuilder, EthereumDaoError};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -22,13 +22,16 @@ pub enum Error {
     Config(#[from] ucdp::config::Error),
 
     #[error("contract error")]
-    Contract(#[from] contract::Error),
+    Contract(#[from] EthereumDaoError),
 
     #[error("deserialization error")]
     Deserialization(#[from] serde_json::Error),
 
     #[error("unknown connector: {0}")]
     UnknownConnector(String),
+
+    #[error("Parameter error: {0}")]
+    Parameter(String),
 
     #[cfg(test)]
     #[error("partner not found: {0}")]
@@ -37,20 +40,24 @@ pub enum Error {
 
 #[async_trait]
 pub trait PartnersDAO: Send + Sync {
-    async fn get_partner(&self, address: &str) -> Result<Partner, Error>;
+    async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error>;
 }
 
-struct EthereumContractPartnersDAO {
-    queries: Box<dyn EthereumContractQueries>,
+struct PartnersEthereumDAO<'a> {
+    ethereum_dao:
+        Box<dyn EthereumContractQuery<'a, (web3::types::Address,), (Vec<u8>, bool, bool)>>,
 }
 
 #[async_trait]
-impl PartnersDAO for EthereumContractPartnersDAO {
-    async fn get_partner(&self, address: &str) -> Result<Partner, Error> {
-        self.queries
-            .get_partner(web3::types::Address::from_str(address).unwrap_or_default())
+impl PartnersDAO for PartnersEthereumDAO<'_> {
+    async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error> {
+        let partner_address = web3::types::Address::from_str(partner_id)
+            .map_err(|_| Error::Parameter("user_id".into()))?;
+
+        self.ethereum_dao
+            .get((partner_address,))
             .await
-            .map(|(name, enabled)| Partner {
+            .map(|(name, enabled, _)| Partner {
                 name: String::from_utf8(name)
                     .unwrap_or_default()
                     .trim_end_matches(char::from(0))
@@ -109,20 +116,18 @@ impl PartnersBuilder {
             .as_str()
         {
             "ethereum" => {
-                let ethereum_dao = EthereumContractPartnersDAO {
-                    queries: EthereumContractQueriesBuilder::build(config),
-                };
-
+                let ethereum_dao = EthereumDaoBuilder::build(config, "partners")?;
+                let dao = PartnersEthereumDAO { ethereum_dao };
                 Ok(Partners {
                     dao: if config.get_str("data.partners.cache").is_ok() {
                         let cache_dao =
                             CacheBuilder::build(config, "data.partners").map_err(Error::Cache)?;
                         Box::new(CachePartnerDAO {
-                            underlying_dao: ethereum_dao,
+                            underlying_dao: dao,
                             cache_dao,
                         })
                     } else {
-                        Box::new(ethereum_dao)
+                        Box::new(dao)
                     },
                 })
             }
@@ -144,9 +149,8 @@ impl PartnersBuilderForTest {
 #[cfg(test)]
 mod tests {
     use crate::ucdp::cache::CacheEntry;
-    use crate::ucdp::dal::partners::{
-        CacheDao, CachePartnerDAO, EthereumContractPartnersDAO, EthereumContractQueries,
-    };
+    use crate::ucdp::dal::ethereum_dao::{EthereumContractQuery, EthereumDaoError};
+    use crate::ucdp::dal::partners::{CacheDao, CachePartnerDAO, PartnersEthereumDAO};
     use crate::ucdp::dal::{Partner, Partners, PartnersBuilder};
     use async_trait::async_trait;
     use ucdp::config::Config;
@@ -155,6 +159,11 @@ mod tests {
     fn partnersbuilder_build_non_cached_ok() {
         let mut config = config::Config::default();
         let _ = config.set("data.partners.connector", "ethereum");
+        let _ = config.set("ethereum.network", "http://ethereum");
+        let _ = config.set(
+            "ethereum.contract",
+            "0x0000000000000000000000000000000000000000",
+        );
         let config = Config::from(config);
 
         let res = PartnersBuilder::build(&config);
@@ -166,6 +175,11 @@ mod tests {
         let mut config = config::Config::default();
         let _ = config.set("data.partners.connector", "ethereum");
         let _ = config.set("data.partners.cache", "aerospike");
+        let _ = config.set("ethereum.network", "http://ethereum");
+        let _ = config.set(
+            "ethereum.contract",
+            "0x0000000000000000000000000000000000000000",
+        );
         let config = Config::from(config);
 
         let res = PartnersBuilder::build(&config);
@@ -191,19 +205,22 @@ mod tests {
         assert!(res.is_err());
     }
 
-    struct ConstQueries {}
+    struct ConstPartnerEthereumDao {}
 
     #[async_trait]
-    impl EthereumContractQueries for ConstQueries {
-        async fn get_partner(
+    impl<'a> EthereumContractQuery<'a, (web3::types::Address,), (Vec<u8>, bool, bool)>
+        for ConstPartnerEthereumDao
+    {
+        async fn get(
             &self,
-            _: web3::types::Address,
-        ) -> Result<(std::vec::Vec<u8>, bool), crate::ucdp::contract::Error> {
+            _: (web3::types::Address,),
+        ) -> Result<(Vec<u8>, bool, bool), EthereumDaoError> {
             Ok((
                 vec![
                     112, 97, 114, 116, 110, 101, 114, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 ],
+                true,
                 true,
             ))
         }
@@ -217,11 +234,14 @@ mod tests {
 
     #[actix_rt::test]
     async fn partners_dao_get_partner() {
-        let queries = Box::new(ConstQueries {});
-        let dao = Box::new(EthereumContractPartnersDAO { queries });
+        let ethereum_dao = Box::new(ConstPartnerEthereumDao {});
+        let dao = Box::new(PartnersEthereumDAO { ethereum_dao });
         let partners = Partners { dao };
 
-        let partner = partners.get_partner("0xaddress").await.unwrap();
+        let partner = partners
+            .get_partner("0x0000000000000000000000000000000000000000")
+            .await
+            .unwrap();
         assert_eq!(
             partner,
             Partner {
@@ -245,8 +265,8 @@ mod tests {
 
     #[actix_rt::test]
     async fn partners_dao_cache_hit() {
-        let queries = Box::new(ConstQueries {});
-        let underlying_dao = EthereumContractPartnersDAO { queries };
+        let ethereum_dao = Box::new(ConstPartnerEthereumDao {});
+        let underlying_dao = PartnersEthereumDAO { ethereum_dao };
         let cache_dao = Box::new(CacheHitDao {});
         let cache_partners_dao = CachePartnerDAO {
             underlying_dao,
@@ -256,7 +276,10 @@ mod tests {
             dao: Box::new(cache_partners_dao),
         };
 
-        let partner = partners.get_partner("0xaddress").await.unwrap();
+        let partner = partners
+            .get_partner("0x0000000000000000000000000000000000000000")
+            .await
+            .unwrap();
         assert_eq!(
             partner,
             Partner {
@@ -292,8 +315,8 @@ mod tests {
                     .to_vec()
             );
         };
-        let queries = Box::new(ConstQueries {});
-        let underlying_dao = EthereumContractPartnersDAO { queries };
+        let ethereum_dao = Box::new(ConstPartnerEthereumDao {});
+        let underlying_dao = PartnersEthereumDAO { ethereum_dao };
         let cache_dao = Box::new(CacheMissDao {
             callback: Box::new(put_in_cache),
         });
@@ -306,7 +329,10 @@ mod tests {
             dao: Box::new(cache_partners_dao),
         };
 
-        let partner = partners.get_partner("0xaddress").await.unwrap();
+        let partner = partners
+            .get_partner("0x0000000000000000000000000000000000000000")
+            .await
+            .unwrap();
         assert_eq!(
             partner,
             Partner {

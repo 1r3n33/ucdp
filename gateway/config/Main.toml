@@ -8,8 +8,6 @@ kafka.topic = "events"
 
 [data.partners]
 connector = "ethereum"
-ethereum.network = "http://127.0.0.1:9545"
-ethereum.contract = "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b"
 cache = "aerospike"
 aerospike.set = "partners"
 
