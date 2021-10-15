@@ -70,3 +70,24 @@ jobs:
         run: cargo test -p workers
       - name: Docker
         run: docker build . -f workers.Dockerfile --no-cache --pull
+
+  test:
+    needs: [gateway, workers]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: docker-compose build
+      - name: Start
+        run: |
+          docker-compose up -d
+          sleep 60
+      - name: Test
+        run: |
+          pushd test
+          npm ci
+          npm test
+          popd
