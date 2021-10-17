@@ -23,19 +23,20 @@ pub enum EthereumDaoError {
 }
 
 #[async_trait]
-pub trait EthereumContractQuery<'a, K, R>: Send + Sync {
+pub trait EthereumDao<'a, K, R>: Send + Sync {
     async fn get(&self, key: K) -> Result<R, EthereumDaoError>
     where
         'a: 'async_trait;
 }
 
-pub struct EthereumDao {
+// Main implementation of EthereumDao
+struct EthereumDaoImpl {
     contract: web3::contract::Contract<web3::transports::Http>,
     function_name: String,
 }
 
 #[async_trait]
-impl<'a, K, R> EthereumContractQuery<'a, K, R> for EthereumDao
+impl<'a, K, R> EthereumDao<'a, K, R> for EthereumDaoImpl
 where
     K: Tokenize + Send + 'a,
     R: Detokenize,
@@ -70,7 +71,7 @@ where
     pub fn build(
         config: &Config,
         function_name: &str,
-    ) -> Result<Box<dyn EthereumContractQuery<'a, K, R>>, EthereumDaoError> {
+    ) -> Result<Box<dyn EthereumDao<'a, K, R>>, EthereumDaoError> {
         let network = config.get_str("ethereum.network")?;
         let contract_address = config
             .get_str("ethereum.contract")
@@ -85,7 +86,7 @@ where
             include_bytes!("../../../res/Ucdp.abi.json"),
         )?;
 
-        let dao = EthereumDao {
+        let dao = EthereumDaoImpl {
             contract,
             function_name: function_name.into(),
         };

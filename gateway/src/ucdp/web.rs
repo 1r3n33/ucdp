@@ -1,6 +1,6 @@
 use crate::ucdp::api::{ErrorResponse, OkResponse};
 use crate::ucdp::dal::{
-    AuthorizedPartnersByUser, AuthorizedPartnersByUserBuilder, Partners, PartnersBuilder,
+    AuthorizedPartnersByUserBuilder, AuthorizedPartnersByUserDao, PartnersBuilder, PartnersDao,
 };
 use actix_cors::Cors;
 use actix_web::{http::header, middleware::Logger, post, web, App, HttpResponse, HttpServer};
@@ -9,8 +9,8 @@ use uuid::Uuid;
 
 struct AppState {
     sender: crossbeam_channel::Sender<crate::ucdp::stream::Events>,
-    partners: Partners,
-    authorized_partners_by_user: AuthorizedPartnersByUser,
+    partners: Box<dyn PartnersDao>,
+    authorized_partners_by_user: Box<dyn AuthorizedPartnersByUserDao>,
 }
 
 // TODO move to api
@@ -116,10 +116,7 @@ pub async fn run_http_server(
 #[cfg(test)]
 mod tests {
     use crate::ucdp::api::User;
-    use crate::ucdp::dal::{
-        AuthorizedPartnersByUserBuilderForTest, AuthorizedPartnersByUserDao, Partner,
-        PartnersBuilderForTest, PartnersDAO, PartnersError,
-    };
+    use crate::ucdp::dal::{AuthorizedPartnersByUserDao, Partner, PartnersDao, PartnersError};
     use crate::ucdp::web::{proxy, AppState};
     use actix_http::http::Method;
     use actix_web::dev::{Service, ServiceResponse};
@@ -129,12 +126,12 @@ mod tests {
     use async_trait::async_trait;
     use crossbeam_channel::unbounded;
 
-    struct PartnerOptionDAO {
+    struct OptionPartnerDao {
         partner: Option<Partner>,
     }
 
     #[async_trait]
-    impl PartnersDAO for PartnerOptionDAO {
+    impl PartnersDao for OptionPartnerDao {
         async fn get_partner(&self, p: &str) -> Result<Partner, PartnersError> {
             self.partner
                 .clone()
@@ -164,13 +161,10 @@ mod tests {
         let (sender, _) = unbounded::<crate::ucdp::stream::Events>();
         let state = web::Data::new(AppState {
             sender,
-            partners: PartnersBuilderForTest::build(Box::new(PartnerOptionDAO { partner })),
-            authorized_partners_by_user: AuthorizedPartnersByUserBuilderForTest::build(Box::new(
-                AuthorizedPartnerByUser {
-                    is_partner_authorized,
-                },
-            ))
-            .unwrap(),
+            partners: Box::new(OptionPartnerDao { partner }),
+            authorized_partners_by_user: Box::new(AuthorizedPartnerByUser {
+                is_partner_authorized,
+            }),
         });
         let service = init_service(App::new().app_data(state.clone()).service(proxy)).await;
         let request = TestRequest::default()

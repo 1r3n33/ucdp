@@ -1,4 +1,4 @@
-use crate::ucdp::dal::ethereum_dao::{EthereumContractQuery, EthereumDaoBuilder, EthereumDaoError};
+use crate::ucdp::dal::ethereum_dao::{EthereumDao, EthereumDaoBuilder, EthereumDaoError};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -25,13 +25,12 @@ pub trait AuthorizedPartnersByUserDao: Send + Sync {
     async fn is_authorized(&self, user_id: &str, partner_id: &str) -> Result<bool, Error>;
 }
 
-struct AuthorizedPartnersByUserEthereumDao<'a> {
-    ethereum_dao:
-        Box<dyn EthereumContractQuery<'a, (web3::types::Address, web3::types::Address), bool>>,
+struct EthereumAuthorizedPartnersByUserDao<'a> {
+    ethereum_dao: Box<dyn EthereumDao<'a, (web3::types::Address, web3::types::Address), bool>>,
 }
 
 #[async_trait]
-impl AuthorizedPartnersByUserDao for AuthorizedPartnersByUserEthereumDao<'_> {
+impl AuthorizedPartnersByUserDao for EthereumAuthorizedPartnersByUserDao<'_> {
     async fn is_authorized(&self, user_id: &str, partner_id: &str) -> Result<bool, Error> {
         let user_adress = web3::types::Address::from_str(user_id)
             .map_err(|_| Error::Parameter("user_id".into()))?;
@@ -45,28 +44,18 @@ impl AuthorizedPartnersByUserDao for AuthorizedPartnersByUserEthereumDao<'_> {
     }
 }
 
-pub struct AuthorizedPartnersByUser {
-    dao: Box<dyn AuthorizedPartnersByUserDao>,
-}
-
-impl AuthorizedPartnersByUser {
-    pub async fn is_authorized(&self, user_id: &str, partner_id: &str) -> Result<bool, Error> {
-        self.dao.is_authorized(user_id, partner_id).await
-    }
-}
-
 pub struct AuthorizedPartnersByUserBuilder {}
 
 impl AuthorizedPartnersByUserBuilder {
-    pub fn build(config: &Config) -> Result<AuthorizedPartnersByUser, Error> {
+    pub fn build(config: &Config) -> Result<Box<dyn AuthorizedPartnersByUserDao>, Error> {
         match config
             .get_str("data.authorized_partners_by_user.connector")?
             .as_str()
         {
             "ethereum" => {
                 let ethereum_dao = EthereumDaoBuilder::build(config, "authorizedPartnersByUser")?;
-                let dao = AuthorizedPartnersByUserEthereumDao { ethereum_dao };
-                Ok(AuthorizedPartnersByUser { dao: Box::new(dao) })
+                let dao = EthereumAuthorizedPartnersByUserDao { ethereum_dao };
+                Ok(Box::new(dao))
             }
             unknown_connector => Err(Error::UnknownConnector(unknown_connector.into())),
         }
@@ -74,23 +63,11 @@ impl AuthorizedPartnersByUserBuilder {
 }
 
 #[cfg(test)]
-pub struct AuthorizedPartnersByUserBuilderForTest {}
-
-#[cfg(test)]
-impl AuthorizedPartnersByUserBuilderForTest {
-    pub fn build(
-        dao: Box<dyn AuthorizedPartnersByUserDao>,
-    ) -> Result<AuthorizedPartnersByUser, Error> {
-        Ok(AuthorizedPartnersByUser { dao })
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::Error;
-    use crate::ucdp::dal::authorized_partners_by_user::AuthorizedPartnersByUserEthereumDao;
-    use crate::ucdp::dal::ethereum_dao::{EthereumContractQuery, EthereumDaoError};
-    use crate::ucdp::dal::{AuthorizedPartnersByUser, AuthorizedPartnersByUserBuilder};
+    use crate::ucdp::dal::authorized_partners_by_user::EthereumAuthorizedPartnersByUserDao;
+    use crate::ucdp::dal::ethereum_dao::{EthereumDao, EthereumDaoError};
+    use crate::ucdp::dal::{AuthorizedPartnersByUserBuilder, AuthorizedPartnersByUserDao};
     use async_trait::async_trait;
     use ucdp::config::Config;
 
@@ -140,7 +117,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl<'a> EthereumContractQuery<'a, (web3::types::Address, web3::types::Address), bool>
+    impl<'a> EthereumDao<'a, (web3::types::Address, web3::types::Address), bool>
         for OptionTestEthereumDao
     {
         async fn get(
@@ -158,10 +135,10 @@ mod tests {
     #[actix_rt::test]
     async fn authorized_partners_by_user_is_authorized_ok() {
         let ethereum_dao = OptionTestEthereumDao { value: Some(true) };
-        let dao = AuthorizedPartnersByUserEthereumDao {
+        let dao = EthereumAuthorizedPartnersByUserDao {
             ethereum_dao: Box::new(ethereum_dao),
         };
-        let authorized_partners_by_user = AuthorizedPartnersByUser { dao: Box::new(dao) };
+        let authorized_partners_by_user = Box::new(dao);
 
         let res = authorized_partners_by_user
             .is_authorized(
@@ -175,10 +152,10 @@ mod tests {
     #[actix_rt::test]
     async fn authorized_partners_by_user_is_authorized_err_contract() {
         let ethereum_dao = OptionTestEthereumDao { value: None };
-        let dao = AuthorizedPartnersByUserEthereumDao {
+        let dao = EthereumAuthorizedPartnersByUserDao {
             ethereum_dao: Box::new(ethereum_dao),
         };
-        let authorized_partners_by_user = AuthorizedPartnersByUser { dao: Box::new(dao) };
+        let authorized_partners_by_user = Box::new(dao);
 
         let res = authorized_partners_by_user
             .is_authorized(
@@ -195,10 +172,10 @@ mod tests {
     #[actix_rt::test]
     async fn authorized_partners_by_user_is_authorized_err_parameter_user_id() {
         let ethereum_dao = OptionTestEthereumDao { value: Some(true) };
-        let dao = AuthorizedPartnersByUserEthereumDao {
+        let dao = EthereumAuthorizedPartnersByUserDao {
             ethereum_dao: Box::new(ethereum_dao),
         };
-        let authorized_partners_by_user = AuthorizedPartnersByUser { dao: Box::new(dao) };
+        let authorized_partners_by_user = Box::new(dao);
 
         let res = authorized_partners_by_user
             .is_authorized(
@@ -216,10 +193,10 @@ mod tests {
     #[actix_rt::test]
     async fn authorized_partners_by_user_is_authorized_err_parameter_partner_id() {
         let ethereum_dao = OptionTestEthereumDao { value: Some(true) };
-        let dao = AuthorizedPartnersByUserEthereumDao {
+        let dao = EthereumAuthorizedPartnersByUserDao {
             ethereum_dao: Box::new(ethereum_dao),
         };
-        let authorized_partners_by_user = AuthorizedPartnersByUser { dao: Box::new(dao) };
+        let authorized_partners_by_user = Box::new(dao);
 
         let res = authorized_partners_by_user
             .is_authorized(

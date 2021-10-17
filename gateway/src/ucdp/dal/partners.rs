@@ -1,6 +1,6 @@
 use crate::ucdp::cache;
 use crate::ucdp::cache::{CacheBuilder, CacheDao};
-use crate::ucdp::dal::ethereum_dao::{EthereumContractQuery, EthereumDaoBuilder, EthereumDaoError};
+use crate::ucdp::dal::ethereum_dao::{EthereumDao, EthereumDaoBuilder, EthereumDaoError};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -39,17 +39,16 @@ pub enum Error {
 }
 
 #[async_trait]
-pub trait PartnersDAO: Send + Sync {
+pub trait PartnersDao: Send + Sync {
     async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error>;
 }
 
-struct PartnersEthereumDAO<'a> {
-    ethereum_dao:
-        Box<dyn EthereumContractQuery<'a, (web3::types::Address,), (Vec<u8>, bool, bool)>>,
+struct EthereumPartnersDao<'a> {
+    ethereum_dao: Box<dyn EthereumDao<'a, (web3::types::Address,), (Vec<u8>, bool, bool)>>,
 }
 
 #[async_trait]
-impl PartnersDAO for PartnersEthereumDAO<'_> {
+impl PartnersDao for EthereumPartnersDao<'_> {
     async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error> {
         let partner_address = web3::types::Address::from_str(partner_id)
             .map_err(|_| Error::Parameter("user_id".into()))?;
@@ -68,15 +67,15 @@ impl PartnersDAO for PartnersEthereumDAO<'_> {
     }
 }
 
-struct CachePartnerDAO<T: PartnersDAO> {
+struct CachePartnerDao<T: PartnersDao> {
     underlying_dao: T,
     cache_dao: Box<dyn CacheDao>,
 }
 
 #[async_trait]
-impl<T> PartnersDAO for CachePartnerDAO<T>
+impl<T> PartnersDao for CachePartnerDao<T>
 where
-    T: PartnersDAO,
+    T: PartnersDao,
 {
     async fn get_partner(&self, address: &str) -> Result<Partner, Error> {
         if let Some(bytes) = self.cache_dao.get(address).map_err(Error::Cache)?.value {
@@ -96,20 +95,10 @@ where
     }
 }
 
-pub struct Partners {
-    dao: Box<dyn PartnersDAO>,
-}
-
-impl Partners {
-    pub async fn get_partner(&self, address: &str) -> Result<Partner, Error> {
-        self.dao.get_partner(address).await
-    }
-}
-
 pub struct PartnersBuilder {}
 
 impl PartnersBuilder {
-    pub fn build(config: &Config) -> Result<Partners, Error> {
+    pub fn build(config: &Config) -> Result<Box<dyn PartnersDao>, Error> {
         match config
             .get_str("data.partners.connector")
             .map_err(Error::Config)?
@@ -117,18 +106,16 @@ impl PartnersBuilder {
         {
             "ethereum" => {
                 let ethereum_dao = EthereumDaoBuilder::build(config, "partners")?;
-                let dao = PartnersEthereumDAO { ethereum_dao };
-                Ok(Partners {
-                    dao: if config.get_str("data.partners.cache").is_ok() {
-                        let cache_dao =
-                            CacheBuilder::build(config, "data.partners").map_err(Error::Cache)?;
-                        Box::new(CachePartnerDAO {
-                            underlying_dao: dao,
-                            cache_dao,
-                        })
-                    } else {
-                        Box::new(dao)
-                    },
+                let dao = EthereumPartnersDao { ethereum_dao };
+                Ok(if config.get_str("data.partners.cache").is_ok() {
+                    let cache_dao =
+                        CacheBuilder::build(config, "data.partners").map_err(Error::Cache)?;
+                    Box::new(CachePartnerDao {
+                        underlying_dao: dao,
+                        cache_dao,
+                    })
+                } else {
+                    Box::new(dao)
                 })
             }
             c => Err(Error::UnknownConnector(c.to_string())),
@@ -137,21 +124,11 @@ impl PartnersBuilder {
 }
 
 #[cfg(test)]
-pub struct PartnersBuilderForTest {}
-
-#[cfg(test)]
-impl PartnersBuilderForTest {
-    pub fn build(dao: Box<dyn PartnersDAO>) -> Partners {
-        Partners { dao }
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use crate::ucdp::cache::CacheEntry;
-    use crate::ucdp::dal::ethereum_dao::{EthereumContractQuery, EthereumDaoError};
-    use crate::ucdp::dal::partners::{CacheDao, CachePartnerDAO, PartnersEthereumDAO};
-    use crate::ucdp::dal::{Partner, Partners, PartnersBuilder};
+    use crate::ucdp::dal::ethereum_dao::{EthereumDao, EthereumDaoError};
+    use crate::ucdp::dal::partners::{CacheDao, CachePartnerDao, EthereumPartnersDao, PartnersDao};
+    use crate::ucdp::dal::{Partner, PartnersBuilder};
     use async_trait::async_trait;
     use ucdp::config::Config;
 
@@ -205,12 +182,10 @@ mod tests {
         assert!(res.is_err());
     }
 
-    struct ConstPartnerEthereumDao {}
+    struct ConstEthereumDao {}
 
     #[async_trait]
-    impl<'a> EthereumContractQuery<'a, (web3::types::Address,), (Vec<u8>, bool, bool)>
-        for ConstPartnerEthereumDao
-    {
+    impl<'a> EthereumDao<'a, (web3::types::Address,), (Vec<u8>, bool, bool)> for ConstEthereumDao {
         async fn get(
             &self,
             _: (web3::types::Address,),
@@ -234,9 +209,8 @@ mod tests {
 
     #[actix_rt::test]
     async fn partners_dao_get_partner() {
-        let ethereum_dao = Box::new(ConstPartnerEthereumDao {});
-        let dao = Box::new(PartnersEthereumDAO { ethereum_dao });
-        let partners = Partners { dao };
+        let ethereum_dao = Box::new(ConstEthereumDao {});
+        let partners = Box::new(EthereumPartnersDao { ethereum_dao });
 
         let partner = partners
             .get_partner("0x0000000000000000000000000000000000000000")
@@ -265,16 +239,14 @@ mod tests {
 
     #[actix_rt::test]
     async fn partners_dao_cache_hit() {
-        let ethereum_dao = Box::new(ConstPartnerEthereumDao {});
-        let underlying_dao = PartnersEthereumDAO { ethereum_dao };
+        let ethereum_dao = Box::new(ConstEthereumDao {});
+        let underlying_dao = EthereumPartnersDao { ethereum_dao };
         let cache_dao = Box::new(CacheHitDao {});
-        let cache_partners_dao = CachePartnerDAO {
+        let cache_partners_dao = CachePartnerDao {
             underlying_dao,
             cache_dao,
         };
-        let partners = Partners {
-            dao: Box::new(cache_partners_dao),
-        };
+        let partners = Box::new(cache_partners_dao);
 
         let partner = partners
             .get_partner("0x0000000000000000000000000000000000000000")
@@ -315,19 +287,17 @@ mod tests {
                     .to_vec()
             );
         };
-        let ethereum_dao = Box::new(ConstPartnerEthereumDao {});
-        let underlying_dao = PartnersEthereumDAO { ethereum_dao };
+        let ethereum_dao = Box::new(ConstEthereumDao {});
+        let underlying_dao = EthereumPartnersDao { ethereum_dao };
         let cache_dao = Box::new(CacheMissDao {
             callback: Box::new(put_in_cache),
         });
-        let cache_partners_dao = CachePartnerDAO {
+        let cache_partners_dao = CachePartnerDao {
             underlying_dao,
 
             cache_dao,
         };
-        let partners = Partners {
-            dao: Box::new(cache_partners_dao),
-        };
+        let partners = Box::new(cache_partners_dao);
 
         let partner = partners
             .get_partner("0x0000000000000000000000000000000000000000")
