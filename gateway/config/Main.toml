@@ -7,16 +7,15 @@ kafka.broker = "127.0.0.1:9092"
 kafka.topic = "events"
 
 [data.partners]
-connector = "ethereum"
-cache = "aerospike"
-aerospike.set = "partners"
+connectors = [ "aerospike", "ethereum" ]
 
 [data.authorized_partners_by_user]
 connector = "ethereum"
 
-[cache]
-aerospike.host = "127.0.0.1:3000"
-
 [ethereum]
 network = "http://127.0.0.1:9545"
 contract = "0xa80E74Ee52efc3D28CF3778d1B54B4dc0c23028b"
+
+[aerospike]
+set = "ucdp"
+host = "127.0.0.1:3000"

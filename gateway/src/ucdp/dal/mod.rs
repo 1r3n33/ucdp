@@ -14,4 +14,5 @@ pub use self::partners::PartnersDao;
 pub type PartnersError = self::partners::Error;
 
 // Implementation specific Dao
+mod aerospike_dao;
 mod ethereum_dao;

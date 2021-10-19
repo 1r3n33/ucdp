@@ -137,6 +137,10 @@ mod tests {
                 .clone()
                 .ok_or_else(|| PartnersError::PartnerNotFound(p.to_string()))
         }
+
+        async fn put_partner(&self, _: &str, _: &Partner) {
+            unimplemented!()
+        }
     }
 
     struct AuthorizedPartnerByUser {
