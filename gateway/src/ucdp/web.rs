@@ -30,7 +30,7 @@ async fn proxy(
         });
     }
     // Check partner id
-    let partner_id = req.partner.as_str();
+    let partner_id = req.partner.id.as_str();
     match state.partners.get_partner(partner_id).await {
         Ok(partner) if !partner.enabled => {
             return HttpResponse::Forbidden().json(&ErrorResponse {
@@ -116,7 +116,7 @@ pub async fn run_http_server(
 #[cfg(test)]
 mod tests {
     use crate::ucdp::api::User;
-    use crate::ucdp::dal::{AuthorizedPartnersByUserDao, Partner, PartnersDao, PartnersError};
+    use crate::ucdp::dal::{AuthorizedPartnersByUserDao, PartnersDao, PartnersError};
     use crate::ucdp::web::{proxy, AppState};
     use actix_http::http::Method;
     use actix_web::dev::{Service, ServiceResponse};
@@ -127,18 +127,18 @@ mod tests {
     use crossbeam_channel::unbounded;
 
     struct OptionPartnerDao {
-        partner: Option<Partner>,
+        partner: Option<crate::ucdp::dal::Partner>,
     }
 
     #[async_trait]
     impl PartnersDao for OptionPartnerDao {
-        async fn get_partner(&self, p: &str) -> Result<Partner, PartnersError> {
+        async fn get_partner(&self, p: &str) -> Result<crate::ucdp::dal::Partner, PartnersError> {
             self.partner
                 .clone()
                 .ok_or_else(|| PartnersError::PartnerNotFound(p.to_string()))
         }
 
-        async fn put_partner(&self, _: &str, _: &Partner) {
+        async fn put_partner(&self, _: &str, _: &crate::ucdp::dal::Partner) {
             unimplemented!()
         }
     }
@@ -159,7 +159,7 @@ mod tests {
     }
 
     async fn get_response(
-        partner: Option<Partner>,
+        partner: Option<crate::ucdp::dal::Partner>,
         is_partner_authorized: bool,
     ) -> ServiceResponse {
         let (sender, _) = unbounded::<crate::ucdp::stream::Events>();
@@ -175,7 +175,9 @@ mod tests {
             .uri("/v1/events")
             .method(Method::POST)
             .set_json(&crate::ucdp::api::Events {
-                partner: "0x123456789".into(),
+                partner: crate::ucdp::api::Partner {
+                    id: "0x123456789".into(),
+                },
                 user: User {
                     id: "0x9876543210".into(),
                 },
@@ -191,7 +193,7 @@ mod tests {
     #[actix_rt::test]
     async fn http_server_simple_request_ok() {
         let response = get_response(
-            Some(Partner {
+            Some(crate::ucdp::dal::Partner {
                 name: "".into(),
                 enabled: true,
             }),
@@ -210,7 +212,7 @@ mod tests {
     #[actix_rt::test]
     async fn http_server_simple_request_err_partner_disabled() {
         let response = get_response(
-            Some(Partner {
+            Some(crate::ucdp::dal::Partner {
                 name: "".into(),
                 enabled: false,
             }),
@@ -223,7 +225,7 @@ mod tests {
     #[actix_rt::test]
     async fn http_server_simple_request_err_partner_not_authorized_by_user() {
         let response = get_response(
-            Some(Partner {
+            Some(crate::ucdp::dal::Partner {
                 name: "".into(),
                 enabled: true,
             }),

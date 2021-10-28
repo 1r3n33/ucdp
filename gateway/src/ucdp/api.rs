@@ -1,6 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
+pub struct Partner {
+    pub id: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
 pub struct User {
     pub id: String,
 }
@@ -14,7 +19,7 @@ pub struct Event {
 // TODO add user in stream event
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Events {
-    pub partner: String,
+    pub partner: Partner,
     pub user: User,
     pub events: Vec<Event>,
 }
