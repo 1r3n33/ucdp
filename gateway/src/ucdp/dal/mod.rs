@@ -16,3 +16,4 @@ pub type PartnersError = self::partners::Error;
 // Implementation specific Dao
 mod aerospike_dao;
 mod ethereum_dao;
+mod in_memory_dao;

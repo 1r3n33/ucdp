@@ -1,5 +1,6 @@
 use crate::ucdp::dal::aerospike_dao::{AerospikeDao, AerospikeDaoBuilder, AerospikeDaoError};
 use crate::ucdp::dal::ethereum_dao::{EthereumDao, EthereumDaoBuilder, EthereumDaoError};
+use crate::ucdp::dal::in_memory_dao::{InMemoryDao, InMemoryDaoBuilder, InMemoryDaoError};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -22,6 +23,9 @@ pub enum Error {
 
     #[error("aerospike dao error")]
     AerospikeDao(#[from] AerospikeDaoError),
+
+    #[error("in memory dao error")]
+    InMemoryDao(#[from] InMemoryDaoError),
 
     #[error("deserialization error")]
     Deserialization(#[from] serde_json::Error),
@@ -94,6 +98,30 @@ impl PartnersDao for AerospikePartnersDao {
     }
 }
 
+struct InMemoryPartnersDao {
+    in_memory_dao: Box<dyn InMemoryDao<String, Partner>>,
+}
+
+#[async_trait]
+impl PartnersDao for InMemoryPartnersDao {
+    async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error> {
+        self.in_memory_dao
+            .get(&String::from(partner_id))
+            .map(|res| res.value)
+            .map_err(Error::InMemoryDao)
+    }
+
+    async fn put_partner(&self, partner_id: &str, partner: &Partner) {
+        self.in_memory_dao.put(
+            String::from(partner_id),
+            Partner {
+                name: partner.name.clone(),
+                enabled: partner.enabled,
+            },
+        )
+    }
+}
+
 struct CachePartnersDao {
     cache_dao: Box<dyn PartnersDao>,
     underlying_dao: Box<dyn PartnersDao>,
@@ -136,6 +164,11 @@ impl PartnersBuilder {
                 let dao = AerospikePartnersDao { aerospike_dao };
                 Ok(Box::new(dao))
             }
+            "in-memory" => {
+                let in_memory_dao = InMemoryDaoBuilder::build(config)?;
+                let dao = InMemoryPartnersDao { in_memory_dao };
+                Ok(Box::new(dao))
+            }
             connector => Err(Error::UnknownConnector(connector.to_string())),
         }
     }
@@ -163,16 +196,17 @@ impl PartnersBuilder {
 mod tests {
     use crate::ucdp::dal::aerospike_dao::{AerospikeDao, AerospikeDaoError, AerospikeDaoResult};
     use crate::ucdp::dal::ethereum_dao::{EthereumDao, EthereumDaoError};
+    use crate::ucdp::dal::in_memory_dao::{InMemoryDao, InMemoryDaoError, InMemoryDaoResult};
     use crate::ucdp::dal::partners::{
-        AerospikePartnersDao, CachePartnersDao, Error, EthereumPartnersDao,
+        AerospikePartnersDao, CachePartnersDao, Error, EthereumPartnersDao, InMemoryPartnersDao,
     };
     use crate::ucdp::dal::PartnersDao;
     use crate::ucdp::dal::{Partner, PartnersBuilder};
     use async_trait::async_trait;
+    use std::time::SystemTime;
     use ucdp::config::Config;
-
     #[test]
-    fn partnersbuilder_build_non_cached_ok() {
+    fn partnersbuilder_build_non_cached_ok_ethereum() {
         let mut config = config::Config::default();
         let _ = config.set("data.partners.connectors", vec!["ethereum"]);
         let _ = config.set("ethereum.network", "http://ethereum");
@@ -180,6 +214,16 @@ mod tests {
             "ethereum.contract",
             "0x0000000000000000000000000000000000000000",
         );
+        let config = Config::from(config);
+
+        let res = PartnersBuilder::build(&config);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn partnersbuilder_build_non_cached_ok_in_memory() {
+        let mut config = config::Config::default();
+        let _ = config.set("data.partners.connectors", vec!["in-memory"]);
         let config = Config::from(config);
 
         let res = PartnersBuilder::build(&config);
@@ -384,6 +428,56 @@ mod tests {
 
         match res {
             Err(Error::AerospikeDao(_)) => (),
+            _ => unreachable!(),
+        }
+    }
+
+    struct TestInMemoryDao {}
+    #[async_trait]
+    impl InMemoryDao<String, Partner> for TestInMemoryDao {
+        fn get(
+            &self,
+            partner_id: &String,
+        ) -> std::result::Result<InMemoryDaoResult<Partner>, InMemoryDaoError> {
+            match partner_id.as_str() {
+                "ok" => Ok(InMemoryDaoResult {
+                    value: Partner {
+                        name: "in-memory partner".into(),
+                        enabled: true,
+                    },
+                    date: SystemTime::UNIX_EPOCH,
+                }),
+                _ => Err(InMemoryDaoError::ItemNotFound),
+            }
+        }
+        fn put(&self, _: String, _: Partner) {
+            unreachable!()
+        }
+    }
+
+    #[actix_rt::test]
+    async fn in_memory_partners_dao_get_partner_ok() {
+        let in_memory_dao = Box::new(TestInMemoryDao {});
+        let partners = InMemoryPartnersDao { in_memory_dao };
+
+        let partner = partners.get_partner("ok").await.unwrap();
+        assert_eq!(
+            partner,
+            Partner {
+                name: "in-memory partner".into(),
+                enabled: true
+            }
+        );
+    }
+
+    #[actix_rt::test]
+    async fn in_memory_partners_dao_get_partner_error() {
+        let in_memory_dao = Box::new(TestInMemoryDao {});
+        let partners = InMemoryPartnersDao { in_memory_dao };
+
+        let res = partners.get_partner("error").await;
+        match res {
+            Err(Error::InMemoryDao(_)) => (),
             _ => unreachable!(),
         }
     }
