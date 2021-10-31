@@ -10,6 +10,9 @@ pub enum InMemoryDaoError {
     #[error("item not found")]
     ItemNotFound,
 
+    #[error("expired")]
+    Expired,
+
     #[error("config error")]
     Config(#[from] ucdp::config::Error),
 
@@ -18,6 +21,9 @@ pub enum InMemoryDaoError {
 
     #[error("write lock error")]
     WriteLock,
+
+    #[error("time error")]
+    Time(#[from] std::time::SystemTimeError),
 }
 
 #[derive(Clone, Debug)]
@@ -44,8 +50,18 @@ impl<K: std::fmt::Debug + Eq + std::hash::Hash + Send + Sync, V: Clone + Send + 
             .hashmap
             .read()
             .map_err(|_| InMemoryDaoError::ReadLock)?;
-        let res = hashmap_r.get(key).ok_or(InMemoryDaoError::ItemNotFound);
-        res.map(|r| r.clone())
+        match hashmap_r.get(key) {
+            Some(res) => {
+                let duration = SystemTime::now().duration_since(res.date)?;
+                // TODO: expiration duration must be data driven
+                if duration.as_secs() > 10 {
+                    Err(InMemoryDaoError::Expired)
+                } else {
+                    Ok(res.clone())
+                }
+            }
+            None => Err(InMemoryDaoError::ItemNotFound),
+        }
     }
 
     fn put(&self, key: K, value: V) {
@@ -91,7 +107,7 @@ mod tests {
     use crate::ucdp::dal::Partner;
     use std::collections::HashMap;
     use std::sync::{Arc, RwLock};
-    use std::time::SystemTime;
+    use std::time::{Duration, SystemTime};
     use ucdp::config::Config;
 
     #[test]
@@ -108,7 +124,7 @@ mod tests {
         }
     }
 
-    fn hashmap() -> Arc<RwLock<HashMap<String, InMemoryDaoResult<Partner>>>> {
+    fn hashmap(time: SystemTime) -> Arc<RwLock<HashMap<String, InMemoryDaoResult<Partner>>>> {
         let mut hashmap = HashMap::<String, InMemoryDaoResult<Partner>>::new();
         hashmap.insert(
             "ABC".into(),
@@ -117,7 +133,7 @@ mod tests {
                     name: "ABC".into(),
                     enabled: true,
                 },
-                date: SystemTime::UNIX_EPOCH,
+                date: time,
             },
         );
         hashmap.insert(
@@ -127,7 +143,7 @@ mod tests {
                     name: "DEF".into(),
                     enabled: true,
                 },
-                date: SystemTime::UNIX_EPOCH,
+                date: time,
             },
         );
         Arc::new(RwLock::new(hashmap))
@@ -135,7 +151,9 @@ mod tests {
 
     #[test]
     fn in_memory_dao_get_ok() {
-        let dao = InMemoryDaoImpl { hashmap: hashmap() };
+        let dao = InMemoryDaoImpl {
+            hashmap: hashmap(SystemTime::now()),
+        };
 
         let res = dao.get(&"ABC".into()).unwrap();
         assert_eq!(
@@ -152,7 +170,9 @@ mod tests {
 
     #[test]
     fn in_memory_dao_get_err_not_found() {
-        let dao = InMemoryDaoImpl { hashmap: hashmap() };
+        let dao = InMemoryDaoImpl {
+            hashmap: hashmap(SystemTime::now()),
+        };
 
         let res = dao.get(&"not found".into());
         match res {
@@ -162,8 +182,36 @@ mod tests {
     }
 
     #[test]
+    fn in_memory_dao_get_err_expired() {
+        let dao = InMemoryDaoImpl {
+            hashmap: hashmap(SystemTime::UNIX_EPOCH),
+        };
+
+        let res = dao.get(&"ABC".into());
+        match res {
+            Err(InMemoryDaoError::Expired) => {}
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn in_memory_dao_get_err_time() {
+        let dao = InMemoryDaoImpl {
+            hashmap: hashmap(SystemTime::now() + Duration::from_secs(60)),
+        };
+
+        let res = dao.get(&"ABC".into());
+        match res {
+            Err(InMemoryDaoError::Time(_)) => {}
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
     fn in_memory_dao_put_ok() {
-        let dao = InMemoryDaoImpl { hashmap: hashmap() };
+        let dao = InMemoryDaoImpl {
+            hashmap: hashmap(SystemTime::now()),
+        };
         dao.put(
             "123".into(),
             Partner {

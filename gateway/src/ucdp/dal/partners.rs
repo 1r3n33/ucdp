@@ -112,13 +112,8 @@ impl PartnersDao for InMemoryPartnersDao {
     }
 
     async fn put_partner(&self, partner_id: &str, partner: &Partner) {
-        self.in_memory_dao.put(
-            String::from(partner_id),
-            Partner {
-                name: partner.name.clone(),
-                enabled: partner.enabled,
-            },
-        )
+        self.in_memory_dao
+            .put(String::from(partner_id), partner.clone())
     }
 }
 
