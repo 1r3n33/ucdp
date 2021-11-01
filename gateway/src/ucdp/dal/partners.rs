@@ -2,6 +2,7 @@ use crate::ucdp::dal::aerospike_dao::{AerospikeDao, AerospikeDaoBuilder, Aerospi
 use crate::ucdp::dal::ethereum_dao::{EthereumDao, EthereumDaoBuilder, EthereumDaoError};
 use crate::ucdp::dal::in_memory_dao::{InMemoryDao, InMemoryDaoBuilder, InMemoryDaoError};
 use async_trait::async_trait;
+use log::trace;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use thiserror::Error;
@@ -53,6 +54,7 @@ struct EthereumPartnersDao<'a> {
 #[async_trait]
 impl PartnersDao for EthereumPartnersDao<'_> {
     async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error> {
+        trace!("EthereumPartnersDao get {:?}", partner_id);
         let partner_address = web3::types::Address::from_str(partner_id)
             .map_err(|_| Error::Parameter("partner_id".into()))?;
 
@@ -69,7 +71,8 @@ impl PartnersDao for EthereumPartnersDao<'_> {
             .map_err(Error::EthereumDao)
     }
 
-    async fn put_partner(&self, _: &str, _: &Partner) {
+    async fn put_partner(&self, partner_id: &str, _: &Partner) {
+        trace!("EthereumPartnersDao put {:?}", partner_id);
         unimplemented!()
     }
 }
@@ -81,6 +84,7 @@ struct AerospikePartnersDao {
 #[async_trait]
 impl PartnersDao for AerospikePartnersDao {
     async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error> {
+        trace!("AerospikePartnersDao get {:?}", partner_id);
         self.aerospike_dao
             .get(partner_id)
             .await?
@@ -92,6 +96,7 @@ impl PartnersDao for AerospikePartnersDao {
     }
 
     async fn put_partner(&self, partner_id: &str, partner: &Partner) {
+        trace!("AerospikePartnersDao put {:?}", partner_id);
         if let Ok(bytes) = serde_json::to_vec(partner) {
             self.aerospike_dao.put(partner_id, bytes).await;
         }
@@ -105,6 +110,7 @@ struct InMemoryPartnersDao {
 #[async_trait]
 impl PartnersDao for InMemoryPartnersDao {
     async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error> {
+        trace!("InMemoryPartnersDao get {:?}", partner_id);
         self.in_memory_dao
             .get(&String::from(partner_id))
             .map(|res| res.value)
@@ -112,6 +118,7 @@ impl PartnersDao for InMemoryPartnersDao {
     }
 
     async fn put_partner(&self, partner_id: &str, partner: &Partner) {
+        trace!("InMemoryPartnersDao put {:?}", partner_id);
         self.in_memory_dao
             .put(String::from(partner_id), partner.clone())
     }
@@ -125,6 +132,7 @@ struct CachePartnersDao {
 #[async_trait]
 impl PartnersDao for CachePartnersDao {
     async fn get_partner(&self, partner_id: &str) -> Result<Partner, Error> {
+        trace!("CachePartnersDao get {:?}", partner_id);
         match self.cache_dao.get_partner(partner_id).await {
             Err(_) => {
                 let res = self.underlying_dao.get_partner(partner_id).await;
@@ -139,7 +147,8 @@ impl PartnersDao for CachePartnersDao {
         }
     }
 
-    async fn put_partner(&self, _: &str, _: &Partner) {
+    async fn put_partner(&self, partner_id: &str, _: &Partner) {
+        trace!("CachePartnersDao put {:?}", partner_id);
         unimplemented!()
     }
 }
@@ -170,19 +179,23 @@ impl PartnersBuilder {
 
     pub fn build(config: &Config) -> Result<Box<dyn PartnersDao>, Error> {
         let connectors = config.get_str_vec("data.partners.connectors")?;
+        PartnersBuilder::build_rec(&connectors, config)
+    }
 
-        if connectors.len() == 1 {
-            PartnersBuilder::build_dao(connectors[0].as_str(), config)
-        } else if connectors.len() == 2 {
-            let cache_dao = PartnersBuilder::build_dao(connectors[0].as_str(), config)?;
-            let underlying_dao = PartnersBuilder::build_dao(connectors[1].as_str(), config)?;
-            let dao = CachePartnersDao {
-                cache_dao,
-                underlying_dao,
-            };
-            Ok(Box::new(dao))
-        } else {
-            Err(Error::UnknownConnector("".into()))
+    fn build_rec(connectors: &[String], config: &Config) -> Result<Box<dyn PartnersDao>, Error> {
+        println!("{:?}", connectors);
+        match connectors.len() {
+            0 => Err(Error::UnknownConnector("".into())),
+            1 => PartnersBuilder::build_dao(connectors[0].as_str(), config),
+            _ => {
+                let cache_dao = PartnersBuilder::build_dao(connectors[0].as_str(), config)?;
+                let underlying_dao = PartnersBuilder::build_rec(&connectors[1..], config)?;
+                let dao = CachePartnersDao {
+                    cache_dao,
+                    underlying_dao,
+                };
+                Ok(Box::new(dao))
+            }
         }
     }
 }
@@ -216,6 +229,18 @@ mod tests {
     }
 
     #[test]
+    fn partnersbuilder_build_non_cached_ok_aerospike() {
+        let mut config = config::Config::default();
+        let _ = config.set("data.partners.connectors", vec!["aerospike"]);
+        let _ = config.set("aerospike.set", "default");
+        let _ = config.set("aerospike.host", "http://aerospike");
+        let config = Config::from(config);
+
+        let res = PartnersBuilder::build(&config);
+        assert!(res.is_ok());
+    }
+
+    #[test]
     fn partnersbuilder_build_non_cached_ok_in_memory() {
         let mut config = config::Config::default();
         let _ = config.set("data.partners.connectors", vec!["in-memory"]);
@@ -228,7 +253,10 @@ mod tests {
     #[test]
     fn partnersbuilder_build_cached_ok() {
         let mut config = config::Config::default();
-        let _ = config.set("data.partners.connectors", vec!["aerospike", "ethereum"]);
+        let _ = config.set(
+            "data.partners.connectors",
+            vec!["in-memory", "aerospike", "ethereum"],
+        );
         let _ = config.set("aerospike.set", "default");
         let _ = config.set("aerospike.host", "http://aerospike");
         let _ = config.set("ethereum.network", "http://ethereum");

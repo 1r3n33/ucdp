@@ -7,7 +7,7 @@ kafka.broker = "127.0.0.1:9092"
 kafka.topic = "events"
 
 [data.partners]
-connectors = [ "aerospike", "ethereum" ]
+connectors = [ "in-memory", "aerospike", "ethereum" ]
 
 [data.authorized_partners_by_user]
 connector = "ethereum"

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::trace;
 use thiserror::Error;
 use ucdp::config::Config;
 
@@ -38,6 +39,7 @@ pub struct AerospikeDaoImpl {
 #[async_trait]
 impl AerospikeDao for AerospikeDaoImpl {
     async fn get(&self, key: &str) -> Result<AerospikeDaoResult, AerospikeDaoError> {
+        trace!("get {:?}", key);
         let key = aerospike::as_key!("ucdp", self.set_name.as_str(), key);
         match self
             .client
@@ -71,6 +73,7 @@ impl AerospikeDao for AerospikeDaoImpl {
     }
 
     async fn put(&self, key: &str, value: Vec<u8>) {
+        trace!("put {:?}", key);
         let key = aerospike::as_key!("ucdp", self.set_name.as_str(), key);
         let bytes: aerospike::Value = value.into();
         let bin = aerospike::as_bin!("0", bytes);

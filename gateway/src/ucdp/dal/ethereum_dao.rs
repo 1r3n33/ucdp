@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::trace;
 use std::str::FromStr;
 use thiserror::Error;
 use ucdp::config::Config;
@@ -38,13 +39,14 @@ struct EthereumDaoImpl {
 #[async_trait]
 impl<'a, K, R> EthereumDao<'a, K, R> for EthereumDaoImpl
 where
-    K: Tokenize + Send + 'a,
+    K: Tokenize + Send + 'a + std::fmt::Debug,
     R: Detokenize,
 {
     async fn get(&self, key: K) -> Result<R, EthereumDaoError>
     where
         'a: 'async_trait,
     {
+        trace!("get {:?}", key);
         self.contract
             .query(
                 self.function_name.as_str(),
@@ -65,7 +67,7 @@ pub struct EthereumDaoBuilder<K, R> {
 
 impl<'a, K, R> EthereumDaoBuilder<K, R>
 where
-    K: Tokenize + Send + 'a,
+    K: Tokenize + Send + 'a + std::fmt::Debug,
     R: Detokenize,
 {
     pub fn build(
