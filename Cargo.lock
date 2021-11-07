@@ -18,15 +18,16 @@ dependencies = [
 
 [[package]]
 name = "actix-codec"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d5dbeb2d9e51344cb83ca7cc170f1217f9fe25bfc50160e6e200b5c31c1019a"
+checksum = "13895df506faee81e423febbae3a33b27fca71831b96bb3d60adf16ebcfea952"
 dependencies = [
  "bitflags",
  "bytes 1.1.0",
  "futures-core",
  "futures-sink",
  "log",
+ "memchr",
  "pin-project-lite 0.2.7",
  "tokio 1.13.0",
  "tokio-util 0.6.9",
@@ -117,8 +118,8 @@ version = "3.0.0-beta.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9b510d35f13987537289f38bf136e7e702a5c87cc28760310cc459544f40afd"
 dependencies = [
- "actix-codec 0.4.0",
- "actix-rt 2.3.0",
+ "actix-codec 0.4.1",
+ "actix-rt 2.4.0",
  "actix-service 2.0.1",
  "actix-tls",
  "actix-utils 3.0.0",
@@ -204,9 +205,9 @@ dependencies = [
 
 [[package]]
 name = "actix-rt"
-version = "2.3.0"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea360596a50aa9af459850737f99293e5cb9114ae831118cb6026b3bbc7583ad"
+checksum = "4a0c218d0a17c120f10ee0c69c9f0c45d87319e8f66b1f065e8412b612fc3e24"
 dependencies = [
  "actix-macros 0.2.3",
  "futures-core",
@@ -219,7 +220,7 @@ version = "2.0.0-beta.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7367665785765b066ad16e1086d26a087f696bc7c42b6f93004ced6cfcf1eeca"
 dependencies = [
- "actix-rt 2.3.0",
+ "actix-rt 2.4.0",
  "actix-service 2.0.1",
  "actix-utils 3.0.0",
  "futures-core",
@@ -271,8 +272,8 @@ version = "3.0.0-beta.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4af84e13e4600829858a3e68079be710d1ada461431e1e4c5ae663479ea0a3c"
 dependencies = [
- "actix-codec 0.4.0",
- "actix-rt 2.3.0",
+ "actix-codec 0.4.1",
+ "actix-rt 2.4.0",
  "actix-service 2.0.1",
  "actix-utils 3.0.0",
  "derive_more",
@@ -318,11 +319,11 @@ version = "4.0.0-beta.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8a4b9d00991d8da308070a5cea7f1bbaa153a91c3fb5567937d99b9f46d601e"
 dependencies = [
- "actix-codec 0.4.0",
+ "actix-codec 0.4.1",
  "actix-http 3.0.0-beta.11",
  "actix-macros 0.2.3",
  "actix-router",
- "actix-rt 2.3.0",
+ "actix-rt 2.4.0",
  "actix-server",
  "actix-service 2.0.1",
  "actix-utils 3.0.0",
@@ -367,9 +368,9 @@ dependencies = [
 
 [[package]]
 name = "addr2line"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e61f2b7f93d2c7d2b08263acaa4a363b3e276806c68af6134c44f523bf1aacd"
+checksum = "b9ecd88a8c8378ca913a680cd98f0f13ac67383d35993f86c90a70e3f137816b"
 dependencies = [
  "gimli",
 ]
@@ -421,9 +422,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.44"
+version = "1.0.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61604a8f862e1d5c3229fdd78f8b02c68dcf73a4c4b05fd636d12240aaa242c1"
+checksum = "ee10e43ae4a853c0a3591d4e2ada1719e553be18199d9da9d4a83f5927c2f5c7"
 
 [[package]]
 name = "arrayvec"
@@ -467,9 +468,9 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backtrace"
-version = "0.3.62"
+version = "0.3.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "091bcdf2da9950f96aa522681ce805e6857f6ca8df73833d35736ab2dc78e152"
+checksum = "321629d8ba6513061f26707241fa9bc89524ff1cd7a915a97ef0c62c666ce1b6"
 dependencies = [
  "addr2line",
  "cc",
@@ -1170,14 +1171,13 @@ version = "0.1.0"
 dependencies = [
  "actix-cors",
  "actix-http 2.2.1",
- "actix-rt 2.3.0",
+ "actix-rt 2.4.0",
  "actix-web",
  "aerospike",
  "async-trait",
  "config",
  "crossbeam-channel",
  "env_logger",
- "futures",
  "log",
  "rdkafka",
  "serde 1.0.130",
@@ -1231,9 +1231,9 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.25.0"
+version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0a01e0497841a3b2db4f8afa483cce65f7e96a3498bd6c541734792aeac8fe7"
+checksum = "78cc372d058dcf6d5ecd98510e7fbc9e5aec4d21de70f65fea8fecebcd881bd4"
 
 [[package]]
 name = "h2"
@@ -1610,9 +1610,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.106"
+version = "0.2.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a60553f9a9e039a333b4e9b20573b9e9b9c0bb3a11e201ccc48ef4283456d673"
+checksum = "fbe5e23404da5b4f555ef85ebed98fb4083e55a00c317800bc2a50ede9f3d219"
 
 [[package]]
 name = "libz-sys"
@@ -1929,9 +1929,9 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openssl"
-version = "0.10.37"
+version = "0.10.38"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bc6b9e4403633698352880b22cbe2f0e45dd0177f6fabe4585536e56a3e4f75"
+checksum = "0c7ae222234c30df141154f159066c5093ff73b63204dcda7121eb082fc56a95"
 dependencies = [
  "bitflags",
  "cfg-if 1.0.0",
@@ -1949,9 +1949,9 @@ checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.68"
+version = "0.9.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c571f25d3f66dd427e417cebf73dbe2361d6125cf6e3a70d143fdf97c9f5150"
+checksum = "c6517987b3f8226b5da3661dad65ff7f300cc59fb5ea8333ca191fc65fde3edf"
 dependencies = [
  "autocfg",
  "cc",
@@ -2039,9 +2039,9 @@ dependencies = [
 
 [[package]]
 name = "paste"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acbf547ad0c65e31259204bd90935776d1c693cec2f4ff7abb7a1bbbd40dfe58"
+checksum = "0744126afe1a6dd7f394cb50a716dbe086cb06e255e53d8d0185d82828358fb5"
 
 [[package]]
 name = "percent-encoding"
@@ -2615,9 +2615,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.68"
+version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f690853975602e1bfe1ccbf50504d67174e3bcf340f23b5ea9992e0587a52d8"
+checksum = "e466864e431129c7e0d3476b92f20458e5879919a0596c6472738d9fa2d342f8"
 dependencies = [
  "itoa",
  "ryu",
@@ -3167,8 +3167,12 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "config",
+ "crossbeam-channel",
+ "futures",
  "log",
  "rdkafka",
+ "serde 1.0.130",
+ "serde_json",
  "thiserror",
 ]
 

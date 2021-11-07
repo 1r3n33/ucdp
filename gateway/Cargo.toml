@@ -16,7 +16,6 @@ async-trait = "0.1.50"
 config = "0.11"
 crossbeam-channel = "0.5"
 env_logger = "0.9.0"
-futures = "0.3"
 log = "0.4.0"
 rdkafka = { version = "0.25", features = ["cmake-build"] }
 serde = "1.0.126"

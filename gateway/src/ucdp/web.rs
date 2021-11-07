@@ -8,7 +8,7 @@ use ucdp::config::Config;
 use uuid::Uuid;
 
 struct AppState {
-    sender: crossbeam_channel::Sender<crate::ucdp::stream::Events>,
+    sender: crossbeam_channel::Sender<ucdp::stream::events::Events>,
     partners: Box<dyn PartnersDao>,
     authorized_partners_by_user: Box<dyn AuthorizedPartnersByUserDao>,
 }
@@ -72,9 +72,15 @@ async fn proxy(
     let token = Uuid::new_v4().to_hyphenated().to_string();
 
     // Send events. Do not wait.
-    let events = crate::ucdp::stream::Events {
+    let events = ucdp::stream::events::Events {
         token: token.clone(),
-        events: req.events.to_vec(),
+        events: req
+            .events
+            .iter()
+            .map(|e| ucdp::stream::events::Event {
+                name: e.name.clone(),
+            })
+            .collect(),
     };
     let _ = state.sender.send(events);
 
@@ -83,7 +89,7 @@ async fn proxy(
 }
 
 pub async fn run_http_server(
-    sender: crossbeam_channel::Sender<crate::ucdp::stream::Events>,
+    sender: crossbeam_channel::Sender<ucdp::stream::events::Events>,
 ) -> std::io::Result<()> {
     let config = Config::new(String::from("config/Main"));
     let server_binding_address = config
@@ -162,7 +168,7 @@ mod tests {
         partner: Option<crate::ucdp::dal::Partner>,
         is_partner_authorized: bool,
     ) -> ServiceResponse {
-        let (sender, _) = unbounded::<crate::ucdp::stream::Events>();
+        let (sender, _) = unbounded::<ucdp::stream::events::Events>();
         let state = web::Data::new(AppState {
             sender,
             partners: Box::new(OptionPartnerDao { partner }),
