@@ -1,8 +1,9 @@
 use crate::config::Config;
+use crate::stream::events::Events;
 use async_trait::async_trait;
 use log::{info, warn};
 use rdkafka::consumer::{CommitMode, Consumer};
-use rdkafka::message::{Headers, Message};
+use rdkafka::message::Message;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -12,6 +13,9 @@ pub enum Error {
 
     #[error("unknown connector: {0}")]
     Kafka(#[from] rdkafka::error::KafkaError),
+
+    #[error("deserialization error")]
+    Deserialization,
 }
 
 #[async_trait]
@@ -29,22 +33,21 @@ impl StreamConsumer for KafkaStreamConsumer {
         match self.kafka_consumer.recv().await {
             Err(_) => {}
             Ok(message) => {
-                let payload = match message.payload_view::<str>() {
-                    None => "",
-                    Some(Ok(s)) => s,
-                    Some(Err(e)) => {
-                        warn!("Error while deserializing message payload: {:?}", e);
-                        ""
+                match message.payload_view::<[u8]>() {
+                    Some(Ok(payload)) => match serde_json::from_slice::<Events>(payload) {
+                        Ok(events) => info!("{:?}", events),
+                        Err(error) => {
+                            warn!("Error while deserializing message payload: {:?}", error)
+                        }
+                    },
+                    Some(Err(error)) => {
+                        warn!("Error while fetching message payload: {:?}", error);
                     }
-                };
-                info!("key: '{:?}', payload: '{}', topic: {}, partition: {}, offset: {}, timestamp: {:?}",
-                  message.key(), payload, message.topic(), message.partition(), message.offset(), message.timestamp());
-                if let Some(headers) = message.headers() {
-                    for i in 0..headers.count() {
-                        let header = headers.get(i).unwrap();
-                        info!("  Header {:#?}: {:?}", header.0, header.1);
+                    None => {
+                        warn!("Error while fetching message payload: Unknown error");
                     }
                 }
+
                 self.kafka_consumer
                     .commit_message(&message, CommitMode::Async)
                     .unwrap();
@@ -60,7 +63,9 @@ impl StreamConsumerBuilder {
         let kafka_broker = config
             .get_str("stream.kafka.broker")
             .map_err(Error::Config)?;
-        let kafka_topic = config.get_str("stream.kafka.topic").map_err(Error::Config)?;
+        let kafka_topic = config
+            .get_str("stream.kafka.topic")
+            .map_err(Error::Config)?;
 
         let kafka_consumer: rdkafka::consumer::StreamConsumer =
             rdkafka::config::ClientConfig::new()

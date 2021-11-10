@@ -88,13 +88,6 @@ mod tests {
     use crate::stream::events::Events;
     use crate::stream::producer::{StreamProducer, StreamProducerBuilder};
     use crossbeam_channel::{unbounded, RecvError};
-    use std::fmt;
-
-    impl fmt::Debug for Events {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{:?}", self.token)
-        }
-    }
 
     impl PartialEq for Events {
         fn eq(&self, other: &Self) -> bool {
