@@ -25,6 +25,21 @@ pub trait StreamConsumer: Send + Sync {
 
 struct KafkaStreamConsumer {
     pub kafka_consumer: rdkafka::consumer::StreamConsumer,
+    pub events_consumer: Box<dyn EventsConsumer>,
+}
+
+#[async_trait]
+pub trait EventsConsumer: Send + Sync {
+    async fn consume(&self, events: &Events);
+}
+
+struct DebugEventsConsumer {}
+
+#[async_trait]
+impl EventsConsumer for DebugEventsConsumer {
+    async fn consume(&self, events: &Events) {
+        info!("{:?}", events)
+    }
 }
 
 #[async_trait]
@@ -35,7 +50,7 @@ impl StreamConsumer for KafkaStreamConsumer {
             Ok(message) => {
                 match message.payload_view::<[u8]>() {
                     Some(Ok(payload)) => match serde_json::from_slice::<Events>(payload) {
-                        Ok(events) => info!("{:?}", events),
+                        Ok(events) => self.events_consumer.consume(&events).await,
                         Err(error) => {
                             warn!("Error while deserializing message payload: {:?}", error)
                         }
@@ -78,7 +93,10 @@ impl StreamConsumerBuilder {
             .subscribe(&[kafka_topic.as_str()])
             .map_err(Error::Kafka)?;
 
-        let stream_consumer = KafkaStreamConsumer { kafka_consumer };
+        let stream_consumer = KafkaStreamConsumer {
+            kafka_consumer,
+            events_consumer: Box::new(DebugEventsConsumer {}),
+        };
 
         Ok(Box::new(stream_consumer))
     }
