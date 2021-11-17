@@ -42,6 +42,22 @@ impl EventsConsumer for DebugEventsConsumer {
     }
 }
 
+pub struct DestinationEventsConsumer {
+    pub destination_endpoint: String,
+}
+
+#[async_trait]
+impl EventsConsumer for DestinationEventsConsumer {
+    async fn consume(&self, events: &Events) {
+        let response = isahc::post(
+            self.destination_endpoint.as_str(),
+            serde_json::to_string(&events).unwrap_or_default(),
+        )
+        .unwrap();
+        info!("{:?}", response);
+    }
+}
+
 #[async_trait]
 impl StreamConsumer for KafkaStreamConsumer {
     async fn consume(&self) {
@@ -95,7 +111,9 @@ impl StreamConsumerBuilder {
 
         let stream_consumer = KafkaStreamConsumer {
             kafka_consumer,
-            events_consumer: Box::new(DebugEventsConsumer {}),
+            events_consumer: Box::new(DestinationEventsConsumer {
+                destination_endpoint: "https://httpbin.org/post".into(),
+            }),
         };
 
         Ok(Box::new(stream_consumer))
